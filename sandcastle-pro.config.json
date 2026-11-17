@@ -1,0 +1,15 @@
+{
+  "gate": [
+    "uv sync",
+    "make check"
+  ],
+  "model": "claude-opus-5-5",
+  "effort": "medium",
+  "sandbox": "native",
+  "pullRequest": true,
+  "stack": "run",
+  "bodyWriter": {
+    "model": "claude-sonnet-5-5",
+    "effort": "low"
+  }
+}

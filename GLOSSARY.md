@@ -14,6 +14,18 @@ _Avoid_: Customer, company, user
 The written plan for adapting this prototype to a real retailer's systems in the first week of an engagement.
 _Avoid_: Setup guide, integration guide
 
+**Visitor**:
+Anyone trying the public demo; each Visitor gets their own sandboxed copy of the Client for one session.
+_Avoid_: Guest, demo user, user
+
+**Replay Mode**:
+The default public demo, which steps through recorded Ops Days with no model and no key.
+_Avoid_: Demo mode, playback, recording
+
+**Live Mode**:
+The public demo in which a Visitor runs Ops Days against real models in their own sandbox.
+_Avoid_: Sandbox mode, interactive mode
+
 ### Data
 
 **Sales Channel**:
@@ -57,6 +69,10 @@ The state of an Upload that a later Upload for the same Sales Channel, day and k
 _Avoid_: Overwritten, replaced, stale
 
 ### Operations
+
+**Ops Day**:
+One simulated business day processed end to end: that day's Uploads go through validation, loading, Anomaly detection, Investigation and Actions.
+_Avoid_: Run, batch, job, daily run
 
 **Anomaly**:
 A statistically unusual pattern in valid data that may mean a business problem, such as a stockout risk or a sales drop at one Store.
