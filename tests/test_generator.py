@@ -19,6 +19,7 @@ from retail_ops_agent.generator import (
     ResubmissionPlan,
     generate_catalog,
     generate_history,
+    generate_opening_stock,
     generate_uploads,
     upload_csv,
 )
@@ -148,6 +149,16 @@ def test_inventory_follows_sales_and_restocks_arriving_after_the_lead_time() -> 
                 expected = on_hand[row.sku] + arrivals[(channel.code, row.sku, day)] - sold[row.sku]
                 assert row.on_hand == expected >= 0
                 on_hand[row.sku] = row.on_hand
+
+
+def test_opening_stock_is_what_every_history_opens_with_whatever_its_first_day() -> None:
+    catalog = generate_catalog(11)
+    opening = generate_opening_stock(catalog)
+    assert set(opening) == {c.code for c in catalog.sales_channels}
+    for first_day in (date(2026, 3, 2), date(2026, 11, 30)):
+        history = generate_history(catalog, first_day, 1)
+        for channel in catalog.sales_channels:
+            assert history.opening_stock(channel.code) == opening[channel.code]
 
 
 def _store_units(seed: int, start: date, days: int) -> int:

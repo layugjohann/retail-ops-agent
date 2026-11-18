@@ -23,6 +23,7 @@ from retail_ops_agent.generator.history import (
     Restock,
     SalesRow,
     generate_history,
+    generate_opening_stock,
 )
 from retail_ops_agent.generator.resubmissions import (
     PlantedResubmission,
@@ -47,6 +48,7 @@ __all__ = [
     "SalesRow",
     "generate_catalog",
     "generate_history",
+    "generate_opening_stock",
     "generate_uploads",
     "online_shop_order_lines_csv",
     "online_shop_stock_snapshot_csv",

@@ -119,15 +119,8 @@ def generate_history(catalog: Catalog, first_day: date, days: int) -> History:
     demand = DemandModel(catalog)
     run = tuple(first_day + timedelta(days=offset) for offset in range(days))
 
-    policies = {
-        (channel.code, sku.code): _StockPolicy.for_sku(demand.base_units(channel.code, sku), sku)
-        for channel in catalog.sales_channels
-        for sku in catalog.skus
-    }
-    opening = {
-        channel.code: {sku.code: policies[(channel.code, sku.code)].order_up_to for sku in catalog.skus}
-        for channel in catalog.sales_channels
-    }
+    policies = _stock_policies(catalog, demand)
+    opening = _opening_stock(catalog, policies)
     on_hand = {(code, sku): units for code, stock in opening.items() for sku, units in stock.items()}
     on_order: dict[tuple[str, str], list[Restock]] = {key: [] for key in on_hand}
 
@@ -207,6 +200,32 @@ def generate_history(catalog: Catalog, first_day: date, days: int) -> History:
         restocks=tuple(restocks),
         order_lines=order_lines,
     )
+
+
+def generate_opening_stock(catalog: Catalog) -> dict[str, dict[str, int]]:
+    """Units of each SKU on hand at each Sales Channel before trading starts, by Sales Channel code.
+
+    The same stock generate_history opens with, whatever its first day. Deterministic for the seed.
+    """
+    return _opening_stock(catalog, _stock_policies(catalog, DemandModel(catalog)))
+
+
+def _stock_policies(catalog: Catalog, demand: DemandModel) -> dict[tuple[str, str], _StockPolicy]:
+    return {
+        (channel.code, sku.code): _StockPolicy.for_sku(demand.base_units(channel.code, sku), sku)
+        for channel in catalog.sales_channels
+        for sku in catalog.skus
+    }
+
+
+def _opening_stock(
+    catalog: Catalog, policies: dict[tuple[str, str], _StockPolicy]
+) -> dict[str, dict[str, int]]:
+    """Every Sales Channel starts each SKU at its order-up-to level."""
+    return {
+        channel.code: {sku.code: policies[(channel.code, sku.code)].order_up_to for sku in catalog.skus}
+        for channel in catalog.sales_channels
+    }
 
 
 @dataclass(frozen=True)
