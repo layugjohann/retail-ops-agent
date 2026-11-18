@@ -84,6 +84,10 @@ _Avoid_: Rejected, failed, blocked
 The state of an Upload that a later Upload for the same Sales Channel, day and kind has replaced.
 _Avoid_: Overwritten, replaced, stale
 
+**Ground Truth**:
+The generator's record of every Defect it planted in an Upload: which Upload, the Defect's kind, the row and column it is in, and the expected outcome. Tests and evals score Intake against it.
+_Avoid_: Answer key, labels, expected results
+
 ### Operations
 
 **Ops Day**:

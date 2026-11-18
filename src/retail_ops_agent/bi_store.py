@@ -47,6 +47,10 @@ class BiStore:
         self._db = duckdb.connect(database)
         self._db.execute(_SCHEMA)
 
+    @property
+    def connection(self) -> duckdb.DuckDBPyConnection:
+        return self._db
+
     def processed_upload_ids(self) -> set[str]:
         return {row[0] for row in self._db.execute("SELECT upload_id FROM uploads").fetchall()}
 
@@ -67,6 +71,20 @@ class BiStore:
                 json.dumps([d.model_dump(mode="json") for d in defects]),
             ],
         )
+
+    def set_status(self, upload_id: str, status: UploadStatus) -> None:
+        self._db.execute("UPDATE uploads SET status = ? WHERE upload_id = ?", [status.value, upload_id])
+
+    def upload_day(self, upload_id: str) -> date:
+        row = self._db.execute("SELECT day FROM uploads WHERE upload_id = ?", [upload_id]).fetchone()
+        if row is None:
+            raise KeyError(f"no processed Upload {upload_id}")
+        return row[0]
+
+    def unload(self, upload_id: str) -> None:
+        """Take an Upload's rows out of the BI data."""
+        self._db.execute("DELETE FROM sales WHERE upload_id = ?", [upload_id])
+        self._db.execute("DELETE FROM inventory WHERE upload_id = ?", [upload_id])
 
     def load_sales(self, upload: Upload, lines: list[SalesLine]) -> None:
         if not lines:
