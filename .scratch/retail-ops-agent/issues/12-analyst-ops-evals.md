@@ -5,7 +5,8 @@
 **Blocked by:** 07, 10
 **Stacked on:** issue/11-approval-queue-rules
 
-**Status:** in-progress
+**Status:** awaiting-merge
+**Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/11
 
 - [ ] Analyst grader: stated cause matches the planted cause
 - [ ] Ops graders: right Action, right Tier, Approval Queue rules respected
@@ -27,3 +28,7 @@ Usage: Implementer 80 input, 60,200 output, 156,543 cache creation, 4,603,706 ca
 **Gate passed**: every command exited 0 (log: `.sandcastle/logs/gate-12-2026-11-18T20-39-16-440Z.log`).
 
 Usage: Body writer 2 input, 1,317 output, 59,070 cache creation, 11,615 cache read.
+
+**Pull Request opened**: https://github.com/layugjohann/retail-ops-agent/pull/11
+
+Stacked on Base Issue 11: this Pull Request targets `issue/11-approval-queue-rules`, the branch of https://github.com/layugjohann/retail-ops-agent/pull/10. Merge that Pull Request first.
