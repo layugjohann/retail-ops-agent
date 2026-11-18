@@ -11,8 +11,21 @@ from retail_ops_agent.defects import Defect
 from retail_ops_agent.uploads import UploadKind, UploadStatus
 
 
+class UploadStatusChange(BaseModel):
+    """One status an Upload took, and when."""
+
+    model_config = ConfigDict(frozen=True)
+
+    changed_at: datetime
+    status: UploadStatus
+
+
 class UploadOutcome(BaseModel):
-    """One Upload's status after Intake, with its Defects, including any corrected by a Safe Fix."""
+    """One Upload's status after Intake, with its Defects, including any corrected by a Safe Fix.
+
+    A Superseded Upload names the later Upload for the same Sales Channel, day and kind that
+    replaced it. history is every status the Upload has had, oldest first.
+    """
 
     model_config = ConfigDict(frozen=True)
 
@@ -24,6 +37,8 @@ class UploadOutcome(BaseModel):
     status: UploadStatus
     processed_at: datetime
     defects: list[Defect]
+    superseded_by: str | None = None
+    history: list[UploadStatusChange] = []
 
 
 class UploaderMessage(BaseModel):

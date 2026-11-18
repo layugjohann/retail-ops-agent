@@ -25,10 +25,23 @@ def test_dashboard_shows_each_quarantined_uploads_message() -> None:
     app = AppTest.from_file(str(APP), default_timeout=120).run()
 
     statuses = app.dataframe[2].value
-    quarantined = set(statuses[statuses["status"] == "quarantined"]["Upload"])
-    assert len(quarantined) == 3
-    assert set(app.dataframe[3].value["Upload"]) == quarantined
+    ever_quarantined = set(statuses[statuses["history"].str.startswith("quarantined")]["Upload"])
+    assert len(ever_quarantined) == 3
+    assert set(app.dataframe[3].value["Upload"]) == ever_quarantined
     assert all("What to do:" in t.value for t in app.text)
+
+
+def test_dashboard_shows_superseded_uploads_and_their_history() -> None:
+    app = AppTest.from_file(str(APP), default_timeout=120).run()
+
+    statuses = app.dataframe[2].value
+    superseded = statuses[statuses["status"] == "superseded"]
+    assert set(superseded["Upload"]) == {"ST03-2026-11-06-sales-001", "ST01-2026-11-10-inventory-001"}
+    corrected = superseded[superseded["Upload"] == "ST03-2026-11-06-sales-001"].iloc[0]
+    assert corrected["superseded by"] == "ST03-2026-11-06-sales-002"
+    assert corrected["history"] == "quarantined → superseded"
+    replacement = statuses[statuses["Upload"] == "ST03-2026-11-06-sales-002"].iloc[0]
+    assert replacement["status"] == "accepted"
 
 
 def test_dashboard_audit_log_lists_safe_fixes_and_can_undo_one() -> None:
