@@ -166,10 +166,13 @@ class OpsDay:
                 model=self._models.analyst,
                 investigated_at=self._clock.now(),
             )
-            self._bi.record_investigation(investigation)
-            investigations.append(investigation)
             proposal = propose_action(investigation, self._models.ops)
             decision = decide(proposal)
+            # Recorded only once both agents have answered, so an Anomaly whose Investigation
+            # failed (a model outage or rate limit) is still investigated when the Ops Day is rerun.
+            self._bi.record_anomaly(anomaly)
+            self._bi.record_investigation(investigation)
+            investigations.append(investigation)
             if decision.runs_on_its_own:
                 entries.append(self._post_alert(investigation, proposal, decision))
         return OpsDayOutcome(
@@ -182,13 +185,10 @@ class OpsDay:
         )
 
     def _detect(self, day: date) -> list[Anomaly]:
-        """The day's Anomalies not already flagged, recorded in the BI store."""
+        """The day's Anomalies not already flagged and investigated."""
         skus = {s.code: s for s in self._erp.list_skus()}
         known = self._bi.anomaly_ids()
-        anomalies = [a for a in detect_stockout_risks(self._bi, day, skus) if a.anomaly_id not in known]
-        for anomaly in anomalies:
-            self._bi.record_anomaly(anomaly)
-        return anomalies
+        return [a for a in detect_stockout_risks(self._bi, day, skus) if a.anomaly_id not in known]
 
     def _post_alert(
         self, investigation: Investigation, proposal: ActionProposal, decision: PolicyDecision

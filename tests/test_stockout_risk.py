@@ -277,3 +277,41 @@ def test_the_sandbox_writes_planted_anomalies_to_the_ground_truth(catalog: Catal
     [planted] = GroundTruth.read(tmp_path / GROUND_TRUTH_FILE).anomalies
     [anomaly] = ops_day.anomalies()
     assert (anomaly.sales_channel, anomaly.sku) == (planted.sales_channel, planted.sku)
+
+
+def test_an_anomaly_whose_investigation_failed_is_investigated_when_the_ops_day_is_rerun(
+    catalog: Catalog, tmp_path: Path, generated: GeneratedUploads
+) -> None:
+    failures = [RuntimeError("rate limited")]
+
+    def analyst(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        if failures:
+            raise failures.pop()
+        return ModelResponse(
+            parts=[
+                ToolCallPart(
+                    info.output_tools[0].name,
+                    {
+                        "cause": "A demand surge drained the stock.",
+                        "evidence": ["Sales far above the usual rate."],
+                        "recommended_action": {"kind": "alert", "description": "Alert."},
+                    },
+                )
+            ]
+        )
+
+    run = Run(catalog, tmp_path, _models(analyst=FunctionModel(analyst)))
+    failed_on: date | None = None
+    for day in generated.history.days:
+        try:
+            run.run(generated, (day,))
+        except RuntimeError:
+            failed_on = day
+            run.ops_day.run_ops_day(day)
+            run.clock.advance(timedelta(days=1))
+
+    assert failed_on is not None
+    [anomaly] = run.ops_day.anomalies()
+    assert anomaly.day == failed_on
+    assert len(run.ops_day.investigations()) == 1
+    assert len([e for e in run.ops_day.audit_log() if e.action is AuditAction.ALERT]) == 1
