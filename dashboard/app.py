@@ -53,6 +53,7 @@ PLANTED_ANOMALIES = [
     AnomalyPlan(kind=AnomalyKind.STOCKOUT_RISK, sales_channel="ST02", day=date(2026, 11, 12)),
 ]
 UNDO_TAKEN_BY = "BI analyst (dashboard)"
+APPROVER = "inventory planner (dashboard)"
 
 
 @st.cache_resource
@@ -206,6 +207,82 @@ else:
             )
             st.caption(f"Investigated by the {i.investigated_by} at {i.investigated_at:%Y-%m-%d %H:%M}.")
 
+st.header("Approval Queue")
+st.caption(
+    "Reorders are Tier 2: each waits here for the inventory planner's yes or no and reaches the ERP "
+    "only once approved. A Reorder costing under the Auto-approval Limit of "
+    f"{ops_day.auto_approval_limit:.2f} is approved by rule and recorded in the Audit Log."
+)
+causes = {i.investigation_id: i.cause for i in investigations}
+queue = ops_day.approval_queue()
+if not queue:
+    st.info("Nothing waiting for Approval.")
+else:
+    st.dataframe(
+        pd.DataFrame(
+            [
+                {
+                    "Action": q.action_id,
+                    "queued at": q.queued_at,
+                    "Investigation": q.investigation_id,
+                    "cause": causes.get(q.investigation_id, ""),
+                    "Sales Channel": q.sales_channel,
+                    "SKU": q.sku,
+                    "SKU name": q.sku_name,
+                    "quantity": q.quantity,
+                    "Supplier": q.supplier_name,
+                    "unit cost": q.unit_cost,
+                    "cost": q.cost,
+                }
+                for q in queue
+            ]
+        ),
+        hide_index=True,
+    )
+    for q in queue:
+        with st.container(border=True):
+            st.markdown(
+                f"**{q.action_id}: Reorder {q.quantity} units of {q.sku} ({q.sku_name}) "
+                f"for {q.sales_channel}** "
+                f"from {q.supplier_name}, cost {q.cost:.2f} ({q.quantity} at {q.unit_cost:.2f})"
+            )
+            st.markdown(f"From Investigation {q.investigation_id}: {causes.get(q.investigation_id, '')}")
+            st.caption(q.reason)
+            approve_column, reject_column = st.columns(2)
+            if approve_column.button("Approve", key=f"approve-{q.action_id}"):
+                approved = ops_day.approve(q.action_id, approved_by=APPROVER)
+                st.success(f"Approved {q.action_id}: placed Reorder {approved.reorder_id} in the ERP")
+                st.rerun()
+            if reject_column.button("Reject", key=f"reject-{q.action_id}"):
+                ops_day.reject(q.action_id, rejected_by=APPROVER)
+                st.rerun()
+decided = [r for r in ops_day.reorders() if r.status.value != "pending"]
+st.subheader("Decided Reorders")
+if not decided:
+    st.info("No Reorders decided yet.")
+else:
+    st.dataframe(
+        pd.DataFrame(
+            [
+                {
+                    "Action": r.action_id,
+                    "Investigation": r.investigation_id,
+                    "Sales Channel": r.sales_channel,
+                    "SKU": r.sku,
+                    "quantity": r.quantity,
+                    "Supplier": r.supplier_name,
+                    "cost": r.cost,
+                    "decision": r.status.value,
+                    "decided by": r.decided_by,
+                    "decided at": r.decided_at,
+                    "ERP Reorder": r.reorder_id or "",
+                }
+                for r in decided
+            ]
+        ),
+        hide_index=True,
+    )
+
 st.header("Audit Log")
 entries = ops_day.audit_log()
 if not entries:
@@ -238,7 +315,11 @@ else:
             list(undoable),
             format_func=lambda entry_id: f"{entry_id}: {undoable[entry_id].summary}",
         )
-        if st.button("Undo"):
-            undo = ops_day.undo(chosen, taken_by=UNDO_TAKEN_BY)
-            st.success(f"Recorded entry {undo.entry_id}: {undo.summary}")
-            st.rerun()
+        if st.button("Undo", key="undo"):
+            try:
+                undo = ops_day.undo(chosen, taken_by=UNDO_TAKEN_BY)
+            except ValueError as refused:
+                st.error(str(refused))
+            else:
+                st.success(f"Recorded entry {undo.entry_id}: {undo.summary}")
+                st.rerun()

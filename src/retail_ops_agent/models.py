@@ -32,19 +32,25 @@ def offline_analyst_model() -> TestModel:
             "cause": OFFLINE_NOTE,
             "evidence": ["See the statistics that flagged the Anomaly."],
             "recommended_action": {
-                "kind": "alert",
-                "description": "Alert the inventory planner to check the SKU's stock and Reorders.",
+                "kind": "reorder",
+                "description": "Reorder the SKU; the inventory planner decides in the Approval Queue.",
             },
         },
     )
 
 
+# The quantity the offline scripted Ops model proposes. It is never investigated, so like every
+# Reorder it goes through the Action policy: above the Auto-approval Limit it waits for a person.
+OFFLINE_REORDER_QUANTITY = 48
+
+
 def offline_ops_model() -> TestModel:
-    """A scripted Ops model that proposes a plain alert."""
+    """A scripted Ops model that proposes a fixed Reorder for the Approval Queue."""
     return TestModel(
         custom_output_args={
-            "kind": "alert",
-            "subject": "Stockout risk flagged",
+            "kind": "reorder",
+            "quantity": OFFLINE_REORDER_QUANTITY,
+            "subject": "Stockout risk flagged: Reorder proposed",
             "body": "Days of cover fell below the Lead Time. " + OFFLINE_NOTE,
         },
     )

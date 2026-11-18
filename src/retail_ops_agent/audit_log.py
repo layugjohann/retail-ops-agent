@@ -26,6 +26,8 @@ class AuditAction(StrEnum):
     SAFE_FIX = "safe_fix"
     QUARANTINE = "quarantine"
     ALERT = "alert"
+    # A Reorder placed in the ERP, after Approval or under the Auto-approval Limit.
+    REORDER = "reorder"
     UNDO = "undo"
 
 
@@ -34,6 +36,7 @@ ACTION_TIERS: dict[AuditAction, ActionTier] = {
     AuditAction.SAFE_FIX: ActionTier.INTERNAL,
     AuditAction.QUARANTINE: ActionTier.INTERNAL,
     AuditAction.ALERT: ActionTier.INTERNAL,
+    AuditAction.REORDER: ActionTier.EXTERNAL,
     AuditAction.UNDO: ActionTier.INTERNAL,
 }
 
@@ -47,6 +50,9 @@ class UndoOperation(StrEnum):
     RELEASE_UPLOAD = "release_upload"
     # Withdraw an alert: it stays in the log, marked withdrawn, and no longer stands.
     WITHDRAW_ALERT = "withdraw_alert"
+    # Cancel a placed Reorder in the ERP. A cancelled Reorder is never placed again by an undo: a new
+    # Reorder needs Approval of its own.
+    CANCEL_REORDER = "cancel_reorder"
     # Reinstate the entry an undo reversed.
     REINSTATE_ENTRY = "reinstate_entry"
 
@@ -59,6 +65,7 @@ class UndoRecipe(BaseModel):
     operation: UndoOperation
     upload_id: str | None = None
     entry_id: int | None = None
+    reorder_id: str | None = None
     description: str
 
 

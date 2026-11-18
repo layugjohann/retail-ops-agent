@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict
 
 from retail_ops_agent.analyst import Investigation
 from retail_ops_agent.anomalies import Anomaly
+from retail_ops_agent.approval_queue import QueuedReorder
 from retail_ops_agent.audit_log import AuditEntry
 from retail_ops_agent.defects import Defect
 from retail_ops_agent.uploads import UploadKind, UploadStatus
@@ -66,6 +67,10 @@ class OpsDayOutcome(BaseModel):
     uploader_messages: list[UploaderMessage]
     anomalies: list[Anomaly] = []
     investigations: list[Investigation] = []
+    # Reorders proposed this Ops Day, with what the Action policy did with each.
+    reorders: list[QueuedReorder] = []
+    # Every Tier 2 Action waiting for Approval once the day is processed.
+    approval_queue: list[QueuedReorder] = []
 
 
 class SalesBySalesChannel(BaseModel):

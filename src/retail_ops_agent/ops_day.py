@@ -11,19 +11,27 @@ from datetime import date
 
 from pydantic_ai.models import Model
 
-from retail_ops_agent.action_policy import ALERT_RECIPIENT, PolicyDecision, decide
+from retail_ops_agent.action_policy import (
+    ALERT_RECIPIENT,
+    AUTO_APPROVER,
+    DEFAULT_AUTO_APPROVAL_LIMIT,
+    PolicyDecision,
+    Route,
+    decide,
+)
 from retail_ops_agent.analyst import Investigation, investigate
 from retail_ops_agent.anomalies import Anomaly, detect_stockout_risks
+from retail_ops_agent.approval_queue import ApprovalQueue, ApprovalStatus, QueuedReorder
 from retail_ops_agent.audit_log import AuditAction, AuditEntry, AuditLog, UndoOperation, UndoRecipe
 from retail_ops_agent.bi_store import BiStore
-from retail_ops_agent.catalog import SalesChannelKind
+from retail_ops_agent.catalog import SalesChannelKind, Sku
 from retail_ops_agent.clock import Clock
 from retail_ops_agent.data_source import DataSource
 from retail_ops_agent.defects import Defect, defect_location
 from retail_ops_agent.erp import ErpClient
 from retail_ops_agent.intake import run_intake
 from retail_ops_agent.notifier import Notification, Notifier
-from retail_ops_agent.ops_agent import OPS_AGENT, ActionProposal, propose_action
+from retail_ops_agent.ops_agent import OPS_AGENT, ActionProposal, ProposedActionKind, propose_action
 from retail_ops_agent.upload_formats import SalesLine, StockLine, parse_upload
 from retail_ops_agent.uploader_messages import quarantine_subject
 from retail_ops_agent.uploads import Upload, UploadKind, UploadStatus
@@ -62,7 +70,13 @@ class OpsDay:
         data_source: DataSource,
         clock: Clock,
         database: str = ":memory:",
+        auto_approval_limit: float = DEFAULT_AUTO_APPROVAL_LIMIT,
     ) -> None:
+        """auto_approval_limit is the Auto-approval Limit: a Reorder costing less is approved by rule;
+        every other Reorder waits in the Approval Queue for a person."""
+        if auto_approval_limit < 0:
+            raise ValueError("the Auto-approval Limit cannot be negative")
+        self._auto_approval_limit = auto_approval_limit
         self._models = models
         self._erp = erp
         self._notifier = notifier
@@ -70,6 +84,7 @@ class OpsDay:
         self._clock = clock
         self._bi = BiStore(database)
         self._audit = AuditLog(self._bi.connection)
+        self._queue = ApprovalQueue(self._bi.connection)
 
     # Operations
 
@@ -114,7 +129,10 @@ class OpsDay:
         Deterministic statistics then flag the day's new Anomalies in the accepted data. The Analyst
         agent investigates each with read-only tools, the Ops agent proposes an Action from the
         Investigation, and the Action policy, not the model, sets its Tier. A Tier 1 alert is posted
-        through the Notifier and recorded in the Audit Log.
+        through the Notifier and recorded in the Audit Log. A Reorder is Tier 2: it is always for the
+        Investigation's SKU and Sales Channel, its cost comes from the ERP's unit cost, and it waits in
+        the Approval Queue unless that cost is under the Auto-approval Limit, in which case it is
+        approved by rule, placed in the ERP and recorded in the Audit Log.
         """
         processed = self._bi.processed_upload_ids()
         days = sorted({d for d in self._bi.upload_days() if d < day} | {day})
@@ -158,6 +176,8 @@ class OpsDay:
         outcomes = [by_id[upload_id] for upload_id in dict.fromkeys(touched)]
         anomalies = self._detect(day)
         investigations: list[Investigation] = []
+        reorders: list[QueuedReorder] = []
+        skus = {s.code: s for s in self._erp.list_skus()}
         for anomaly in anomalies:
             investigation = investigate(
                 anomaly,
@@ -166,8 +186,10 @@ class OpsDay:
                 model=self._models.analyst,
                 investigated_at=self._clock.now(),
             )
-            proposal = propose_action(investigation, self._models.ops)
-            decision = decide(proposal)
+            sku = skus[anomaly.sku]
+            proposal = propose_action(investigation, sku, self._models.ops)
+            cost = _cost(sku, proposal.quantity) if proposal.kind is ProposedActionKind.REORDER else None
+            decision = decide(proposal, cost=cost, auto_approval_limit=self._auto_approval_limit)
             # Recorded only once both agents have answered, so an Anomaly whose Investigation
             # failed (a model outage or rate limit) is still investigated when the Ops Day is rerun.
             self._bi.record_anomaly(anomaly)
@@ -175,6 +197,18 @@ class OpsDay:
             investigations.append(investigation)
             if decision.runs_on_its_own:
                 entries.append(self._post_alert(investigation, proposal, decision))
+            elif proposal.kind is ProposedActionKind.REORDER:
+                item = self._queue_reorder(investigation, sku, proposal)
+                if decision.route is Route.AUTO_APPROVE:
+                    item = self._place_reorder(
+                        item,
+                        status=ApprovalStatus.AUTO_APPROVED,
+                        decided_by=AUTO_APPROVER,
+                        reason=f"its cost {item.cost:.2f} is under the Auto-approval Limit "
+                        f"of {self._auto_approval_limit:.2f}",
+                    )
+                    entries.append(self._audit.entry(_required(item.audit_entry_id)))
+                reorders.append(item)
         return OpsDayOutcome(
             day=day,
             uploads=outcomes,
@@ -182,6 +216,106 @@ class OpsDay:
             uploader_messages=messages,
             anomalies=anomalies,
             investigations=investigations,
+            reorders=reorders,
+            approval_queue=self._queue.pending(),
+        )
+
+    def approve(self, action_id: str, *, approved_by: str) -> QueuedReorder:
+        """Approve a pending Reorder in the Approval Queue: it is placed in the ERP and recorded in the
+        Audit Log as taken by the person who approved it."""
+        item = self._pending(action_id)
+        return self._place_reorder(
+            item, status=ApprovalStatus.APPROVED, decided_by=approved_by, reason=f"approved by {approved_by}"
+        )
+
+    def reject(self, action_id: str, *, rejected_by: str, note: str | None = None) -> QueuedReorder:
+        """Reject a pending Reorder in the Approval Queue. Nothing reaches the ERP; the decision, who
+        took it and when are recorded, with the person's note if they gave one."""
+        item = self._pending(action_id)
+        return self._queue.save(
+            item.model_copy(
+                update={
+                    "status": ApprovalStatus.REJECTED,
+                    "decided_at": self._clock.now(),
+                    "decided_by": rejected_by,
+                    "note": note or None,
+                }
+            )
+        )
+
+    def _pending(self, action_id: str) -> QueuedReorder:
+        try:
+            item = self._queue.get(action_id)
+        except KeyError:
+            raise ValueError(f"no Action {action_id} in the Approval Queue") from None
+        if item.status is not ApprovalStatus.PENDING:
+            raise ValueError(f"Action {action_id} is already decided: {item.status.value}")
+        return item
+
+    def _queue_reorder(
+        self, investigation: Investigation, sku: Sku, proposal: ActionProposal
+    ) -> QueuedReorder:
+        quantity = _required(proposal.quantity)
+        suppliers = {s.code: s.name for s in self._erp.list_suppliers()}
+        return self._queue.add(
+            QueuedReorder(
+                action_id=self._queue.next_action_id(),
+                queued_at=self._clock.now(),
+                investigation_id=investigation.investigation_id,
+                sales_channel=investigation.anomaly.sales_channel,
+                sku=sku.code,
+                sku_name=sku.name,
+                supplier_code=sku.supplier_code,
+                supplier_name=suppliers.get(sku.supplier_code, sku.supplier_code),
+                quantity=quantity,
+                unit_cost=sku.unit_cost,
+                cost=_cost(sku, quantity),
+                subject=proposal.subject,
+                reason=proposal.body,
+                status=ApprovalStatus.PENDING,
+            )
+        )
+
+    def _place_reorder(
+        self, item: QueuedReorder, *, status: ApprovalStatus, decided_by: str, reason: str
+    ) -> QueuedReorder:
+        """The only place a Reorder reaches the ERP: called for an item approved by a person or under
+        the Auto-approval Limit."""
+        reorder = self._erp.place_reorder(
+            sales_channel=item.sales_channel, sku=item.sku, quantity=item.quantity
+        )
+        entry = self._audit.append(
+            recorded_at=self._clock.now(),
+            action=AuditAction.REORDER,
+            triggered_by=f"{item.subject} ({item.investigation_id}); {reason}",
+            taken_by=decided_by,
+            summary=(
+                f"Placed Reorder {reorder.reorder_id}: {reorder.quantity} units of {item.sku} for "
+                f"{item.sales_channel} from {item.supplier_name}, cost {reorder.cost:.2f}"
+            ),
+            upload_id=None,
+            defect=None,
+            investigation_id=item.investigation_id,
+            undo=UndoRecipe(
+                operation=UndoOperation.CANCEL_REORDER,
+                reorder_id=reorder.reorder_id,
+                description=(
+                    f"Cancel Reorder {reorder.reorder_id} in the ERP and tell {item.supplier_name}. "
+                    "A cancelled Reorder is never placed again by an undo."
+                ),
+            ),
+        )
+        return self._queue.save(
+            item.model_copy(
+                update={
+                    "status": status,
+                    "decided_at": self._clock.now(),
+                    "decided_by": decided_by,
+                    "cost": reorder.cost,
+                    "reorder_id": reorder.reorder_id,
+                    "audit_entry_id": entry.entry_id,
+                }
+            )
         )
 
     def _detect(self, day: date) -> list[Anomaly]:
@@ -222,7 +356,9 @@ class OpsDay:
         Undoing a Safe Fix takes its Upload back to how it arrived: the Upload's rows leave the BI
         data and, with its Defect no longer fixed, it is held in Quarantine. Undoing a Quarantine
         releases the Upload: the rows that passed every check are loaded and it is accepted. Undoing
-        an alert withdraws it. Undoing an undo reinstates what it reversed.
+        an alert withdraws it. Undoing a Reorder cancels it in the ERP; that undo cannot itself be
+        undone, because placing a Reorder again needs Approval. Undoing any other undo reinstates what
+        it reversed.
         """
         try:
             target = self._audit.entry(entry_id)
@@ -236,6 +372,13 @@ class OpsDay:
                 f"Upload {target.upload_id} is Superseded by Upload {superseded_by}; "
                 f"Audit Log entry {entry_id} can no longer be undone"
             )
+        if target.undoes is not None and self._audit.entry(target.undoes).action is AuditAction.REORDER:
+            raise ValueError(
+                f"Audit Log entry {entry_id} cancelled a Reorder; a cancelled Reorder is not placed again "
+                "by an undo. A new Reorder needs Approval."
+            )
+        if target.action is AuditAction.REORDER:
+            self._erp.cancel_reorder(_required(target.undo.reorder_id))
         entry = self._audit.append(
             recorded_at=self._clock.now(),
             action=AuditAction.UNDO,
@@ -386,6 +529,20 @@ class OpsDay:
         """Every Investigation with its cause, evidence and recommended Action, newest first."""
         return self._bi.investigations()
 
+    def approval_queue(self) -> list[QueuedReorder]:
+        """Tier 2 Actions waiting for Approval, oldest first, each with its Investigation, quantity,
+        Supplier and cost."""
+        return self._queue.pending()
+
+    def reorders(self) -> list[QueuedReorder]:
+        """Every Reorder proposed, newest first, with its Approval status: pending, approved by a
+        person, approved under the Auto-approval Limit, or rejected."""
+        return self._queue.all()
+
+    @property
+    def auto_approval_limit(self) -> float:
+        return self._auto_approval_limit
+
     def uploader_messages(self) -> list[UploaderMessage]:
         """Every message Intake sent an Uploader, newest first."""
         return self._bi.uploader_messages()
@@ -438,3 +595,14 @@ class OpsDay:
 
     def _sales_channel_names(self) -> dict[str, str]:
         return {c.code: c.name for c in self._erp.list_sales_channels()}
+
+
+def _cost(sku: Sku, quantity: int | None) -> float:
+    """A Reorder's cost from the ERP's unit cost, by rule; the model's word on cost is never used."""
+    return round((quantity or 0) * sku.unit_cost, 2)
+
+
+def _required[T](value: T | None) -> T:
+    if value is None:
+        raise ValueError("missing value")
+    return value
