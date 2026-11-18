@@ -5,7 +5,8 @@
 **Blocked by:** 01
 **Stacked on:** issue/01-walking-skeleton
 
-**Status:** in-progress
+**Status:** awaiting-merge
+**Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/2
 
 - [ ] The generator produces all four formats from the spec (Store sales, Store inventory, Online Shop order lines with paid/cancelled/refunded, Online Shop stock snapshot with its own headers)
 - [ ] Generated inventory is consistent with sales and with restocks arriving after the lead time
@@ -29,3 +30,7 @@ Usage: Implementer 42 input, 41,878 output, 95,908 cache creation, 1,619,786 cac
 **Gate passed**: every command exited 0 (log: `.sandcastle/logs/gate-02-2026-11-18T06-40-48-275Z.log`).
 
 Usage: Body writer 2 input, 1,629 output, 54,600 cache creation, 11,615 cache read.
+
+**Pull Request opened**: https://github.com/layugjohann/retail-ops-agent/pull/2
+
+Stacked on Base Issue 01: this Pull Request targets `issue/01-walking-skeleton`, the branch of https://github.com/layugjohann/retail-ops-agent/pull/1. Merge that Pull Request first.
