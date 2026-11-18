@@ -246,6 +246,11 @@ class OpsDay:
         # passed. Rows with a Defect are never among them.
         parsed = parse_upload(upload, self._channel_kinds()[upload.sales_channel], self._known_skus())
         self._load(upload, parsed.sales, parsed.stock)
+        if not fixes:
+            # A released Upload's Safe Fixes were never logged while it was Quarantined; every
+            # Safe Fix behind loaded rows must be in the Audit Log and undoable.
+            for defect in parsed.safe_fixed:
+                self._record_safe_fix(upload, defect)
         self._bi.set_status(
             upload_id, UploadStatus.SAFE_FIXED if parsed.safe_fixed else UploadStatus.ACCEPTED
         )

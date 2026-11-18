@@ -267,3 +267,31 @@ def test_releasing_a_duplicated_day_loads_each_row_once(ops_day: OpsDay, catalog
 
     [inventory] = ops_day.inventory_by_sales_channel()
     assert inventory.on_hand == sum(r.on_hand for r in generated.history.inventory("ST02", DAY))
+
+
+def test_releasing_an_upload_logs_each_safe_fix_behind_its_loaded_rows(
+    ops_day: OpsDay, catalog: Catalog
+) -> None:
+    good, bad = catalog.skus[0].code, catalog.skus[1].code
+    upload_id = ops_day.submit_upload(
+        sales_channel="ST01",
+        day=DAY,
+        kind=UploadKind.INVENTORY,
+        content=(
+            f"date,store_code,sku,on_hand\n{DAY.isoformat()}, ST01 ,{good},4\n"
+            f"{DAY.isoformat()},ST01,{bad},-4\n"
+        ),
+        uploader=UPLOADER,
+    )
+    [quarantine] = ops_day.run_ops_day(DAY).audit_entries
+
+    ops_day.undo(quarantine.entry_id, taken_by=ANALYST)
+
+    assert _status(ops_day, upload_id) is UploadStatus.SAFE_FIXED
+    [fix] = [e for e in ops_day.audit_log() if e.action is AuditAction.SAFE_FIX]
+    assert fix.defect is not None and fix.defect.kind is DefectKind.STRAY_WHITESPACE
+
+    ops_day.undo(fix.entry_id, taken_by=ANALYST)
+
+    assert _status(ops_day, upload_id) is UploadStatus.QUARANTINED
+    assert ops_day.inventory_by_sku() == []
