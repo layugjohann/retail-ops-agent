@@ -54,12 +54,15 @@ def _truth(generated: GeneratedUploads, sales_channel: str, kind: UploadKind) ->
     return sum(r.on_hand for r in generated.history.inventory(sales_channel, DAY))
 
 
-def test_the_safe_fix_table_covers_every_defect_kind_and_marks_the_planted_ones_safe() -> None:
+SAFE_FIXABLE = sorted(k for k in PLANTABLE_DEFECTS if SAFE_FIX_TABLE[k])
+
+
+def test_the_safe_fix_table_covers_every_defect_kind_and_every_safe_kind_can_be_planted() -> None:
     assert set(SAFE_FIX_TABLE) == set(DefectKind)
-    assert {k for k, safe in SAFE_FIX_TABLE.items() if safe} == PLANTABLE_DEFECTS
+    assert {k for k, safe in SAFE_FIX_TABLE.items() if safe} <= PLANTABLE_DEFECTS
 
 
-@pytest.mark.parametrize("defect_kind", sorted(PLANTABLE_DEFECTS))
+@pytest.mark.parametrize("defect_kind", SAFE_FIXABLE)
 @pytest.mark.parametrize("sales_channel", ["ST01", "ONLINE"])
 @pytest.mark.parametrize("kind", list(UploadKind))
 def test_each_planted_safe_fixable_defect_is_detected_fixed_and_logged(
@@ -206,7 +209,7 @@ def test_a_safe_fixable_defect_beside_an_unfixable_one_is_quarantined_without_a_
         (DefectKind.STRAY_WHITESPACE, "store_code"),
         (DefectKind.IMPOSSIBLE_QUANTITY, "on_hand"),
     }
-    assert outcome.audit_entries == []
+    assert [e.action for e in outcome.audit_entries] == [AuditAction.QUARANTINE]
     assert ops_day.inventory_by_sku() == []
 
 
@@ -224,7 +227,7 @@ def test_a_header_that_could_be_either_of_two_columns_is_not_renamed(
     [upload] = outcome.uploads
     assert upload.status is UploadStatus.QUARANTINED
     assert {d.kind for d in upload.defects} == {DefectKind.MISSING_COLUMN}
-    assert outcome.audit_entries == []
+    assert [e.action for e in outcome.audit_entries] == [AuditAction.QUARANTINE]
 
 
 def test_semicolons_with_decimal_commas_are_not_guessed_at(ops_day: OpsDay, catalog: Catalog) -> None:
@@ -235,4 +238,4 @@ def test_semicolons_with_decimal_commas_are_not_guessed_at(ops_day: OpsDay, cata
     outcome = ops_day.run_ops_day(DAY)
 
     assert [u.status for u in outcome.uploads] == [UploadStatus.QUARANTINED]
-    assert outcome.audit_entries == []
+    assert [e.action for e in outcome.audit_entries] == [AuditAction.QUARANTINE]

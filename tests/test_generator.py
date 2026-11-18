@@ -250,8 +250,48 @@ def test_each_plantable_defect_kind_can_be_planted_on_its_own() -> None:
 def test_defect_kinds_that_cannot_be_planted_yet_are_refused() -> None:
     history = generate_history(generate_catalog(3), _PLAN_DAY, 1)
     plan = DefectPlan(
-        sales_channel="ST01", day=_PLAN_DAY, upload_kind=UploadKind.SALES, defect_kind=DefectKind.UNKNOWN_SKU
+        sales_channel="ST01",
+        day=_PLAN_DAY,
+        upload_kind=UploadKind.SALES,
+        defect_kind=DefectKind.SALES_CHANNEL_MISMATCH,
     )
 
     with pytest.raises(ValueError, match="cannot be planted"):
         generate_uploads(history, [plan])
+
+
+def test_unfixable_defects_are_recorded_as_expecting_quarantine_for_their_whole_upload() -> None:
+    history = generate_history(generate_catalog(3), _PLAN_DAY, 1)
+    plans = [
+        DefectPlan(sales_channel="ST04", day=_PLAN_DAY, upload_kind=UploadKind.INVENTORY, defect_kind=kind)
+        for kind in (DefectKind.STRAY_WHITESPACE, DefectKind.UNKNOWN_SKU)
+    ]
+
+    generated = generate_uploads(history, plans)
+
+    truth = {p.defect_kind: p for p in generated.ground_truth.defects}
+    assert truth[DefectKind.STRAY_WHITESPACE].has_safe_fix
+    assert not truth[DefectKind.UNKNOWN_SKU].has_safe_fix
+    assert {p.expected_status for p in truth.values()} == {UploadStatus.QUARANTINED}
+    unknown = truth[DefectKind.UNKNOWN_SKU]
+    columns, rows = _rows(generated.content("ST04", _PLAN_DAY, UploadKind.INVENTORY))
+    assert unknown.row is not None and unknown.column in columns
+    assert rows[unknown.row - 2][unknown.column] not in {s.code for s in history.catalog.skus}
+
+
+def test_a_duplicated_day_repeats_every_row_after_the_last() -> None:
+    history = generate_history(generate_catalog(3), _PLAN_DAY, 1)
+    plan = DefectPlan(
+        sales_channel="ST01",
+        day=_PLAN_DAY,
+        upload_kind=UploadKind.SALES,
+        defect_kind=DefectKind.DUPLICATE_DAY,
+    )
+
+    generated = generate_uploads(history, [plan])
+
+    clean = upload_csv(history, "ST01", _PLAN_DAY, UploadKind.SALES)
+    header, body = clean.split("\n", 1)
+    assert generated.content("ST01", _PLAN_DAY, UploadKind.SALES) == f"{header}\n{body}{body}"
+    [planted] = generated.ground_truth.defects
+    assert planted.row == len(body.splitlines()) + 2

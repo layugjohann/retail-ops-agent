@@ -22,7 +22,8 @@ from retail_ops_agent.uploads import UploadKind
 SEED = 7
 FIRST_DAY = date(2026, 11, 1)
 DAYS = 14
-# Safe-fixable Defects planted in the sandbox's Uploads, so the Audit Log has Safe Fixes to show.
+# Defects planted in the sandbox's Uploads: some with a Safe Fix, so the Audit Log has Safe Fixes to
+# show, and some without, so there are Quarantined Uploads and Uploader messages.
 PLANTED_DEFECTS = [
     DefectPlan(sales_channel=channel, day=date(2026, 11, day), upload_kind=kind, defect_kind=defect)
     for channel, day, kind, defect in [
@@ -30,6 +31,9 @@ PLANTED_DEFECTS = [
         ("ONLINE", 5, UploadKind.INVENTORY, DefectKind.WRONG_DELIMITER),
         ("ST04", 8, UploadKind.INVENTORY, DefectKind.STRAY_WHITESPACE),
         ("ONLINE", 11, UploadKind.SALES, DefectKind.BYTE_ORDER_MARK),
+        ("ST03", 6, UploadKind.SALES, DefectKind.MISSING_COLUMN),
+        ("ST05", 9, UploadKind.INVENTORY, DefectKind.UNKNOWN_SKU),
+        ("ONLINE", 12, UploadKind.SALES, DefectKind.DUPLICATE_DAY),
     ]
 ]
 UNDO_TAKEN_BY = "BI analyst (dashboard)"
@@ -101,7 +105,35 @@ statuses = pd.DataFrame(
 if statuses.empty:
     st.info("No Uploads processed yet.")
 else:
+    quarantined = int((statuses["status"] == "quarantined").sum())
+    st.caption(
+        f"{quarantined} Upload{'s' if quarantined != 1 else ''} in Quarantine: held out of the BI data "
+        "until the Uploader resends a corrected file."
+    )
     st.dataframe(statuses, hide_index=True)
+
+st.header("Uploader messages")
+messages = ops_day.uploader_messages()
+if not messages:
+    st.info("No messages sent to Uploaders.")
+else:
+    st.dataframe(
+        pd.DataFrame(
+            [
+                {
+                    "sent at": m.sent_at,
+                    "to": m.recipient,
+                    "Upload": m.upload_id,
+                    "subject": m.subject,
+                }
+                for m in messages
+            ]
+        ),
+        hide_index=True,
+    )
+    for m in messages:
+        with st.expander(f"{m.sent_at:%Y-%m-%d %H:%M} to {m.recipient}: {m.subject}"):
+            st.text(m.body)
 
 st.header("Audit Log")
 entries = ops_day.audit_log()
