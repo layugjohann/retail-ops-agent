@@ -4,7 +4,8 @@
 
 **Blocked by:** None
 
-**Status:** in-progress
+**Status:** awaiting-merge
+**Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/1
 
 - [ ] Python project managed by uv, with ruff (lint and format check), pyright and pytest. `make check` runs all of them and is the sandcastle-pro Gate
 - [ ] `.env.example` lists the optional free-tier model keys (Groq, Gemini); nothing requires a paid service (ADR 0001)
@@ -30,3 +31,5 @@ Usage: Implementer 42 input, 32,707 output, 71,017 cache creation, 1,182,810 cac
 **Gate passed**: every command exited 0 (log: `.sandcastle/logs/gate-01-2026-11-18T05-47-53-996Z.log`).
 
 Usage: Body writer 2 input, 1,221 output, 224,252 cache creation, 11,615 cache read.
+
+**Pull Request opened**: https://github.com/layugjohann/retail-ops-agent/pull/1
