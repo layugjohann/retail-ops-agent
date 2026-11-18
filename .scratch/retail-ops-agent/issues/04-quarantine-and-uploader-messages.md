@@ -5,7 +5,8 @@
 **Blocked by:** 03
 **Stacked on:** issue/03-safe-fixes-and-audit-log
 
-**Status:** in-progress
+**Status:** awaiting-merge
+**Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/4
 
 - [ ] Planted unfixable Defects (missing column, ambiguous swapped columns, duplicate day in one file, impossible quantity, unknown SKU, date mismatch) each lead to Quarantine
 - [ ] None of a Quarantined Upload's rows appear in the BI data
@@ -27,3 +28,7 @@ Usage: Implementer 64 input, 49,799 output, 125,521 cache creation, 3,110,319 ca
 **Gate passed**: every command exited 0 (log: `.sandcastle/logs/gate-04-2026-11-18T07-07-36-745Z.log`).
 
 Usage: Body writer 2 input, 1,875 output, 48,195 cache creation, 11,615 cache read.
+
+**Pull Request opened**: https://github.com/layugjohann/retail-ops-agent/pull/4
+
+Stacked on Base Issue 03: this Pull Request targets `issue/03-safe-fixes-and-audit-log`, the branch of https://github.com/layugjohann/retail-ops-agent/pull/3. Merge that Pull Request first.
