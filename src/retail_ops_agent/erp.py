@@ -7,6 +7,7 @@ both, so the fake can't drift from the server.
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Mapping
 from enum import StrEnum
 from typing import Protocol
@@ -99,6 +100,9 @@ class InMemoryErp:
             for sku in catalog.skus
         }
         self._reorders: dict[str, Reorder] = {}
+        # The ERP MCP server runs each tool call on its own worker thread, so Reorder changes are
+        # serialised: otherwise two Reorders placed at once could get the same id and one be lost.
+        self._reorders_lock = threading.Lock()
 
     def list_sales_channels(self) -> list[SalesChannel]:
         return list(self._catalog.sales_channels)
@@ -125,17 +129,18 @@ class InMemoryErp:
         if quantity < 1:
             raise ErpRefusal(f"a Reorder needs a quantity of at least 1, not {quantity}")
         item = self._skus[sku]
-        reorder = Reorder(
-            reorder_id=f"RO-{len(self._reorders) + 1:05d}",
-            sales_channel=sales_channel,
-            sku=sku,
-            supplier_code=item.supplier_code,
-            quantity=quantity,
-            unit_cost=item.unit_cost,
-            cost=round(quantity * item.unit_cost, 2),
-            status=ReorderStatus.PLACED,
-        )
-        self._reorders[reorder.reorder_id] = reorder
+        with self._reorders_lock:
+            reorder = Reorder(
+                reorder_id=f"RO-{len(self._reorders) + 1:05d}",
+                sales_channel=sales_channel,
+                sku=sku,
+                supplier_code=item.supplier_code,
+                quantity=quantity,
+                unit_cost=item.unit_cost,
+                cost=round(quantity * item.unit_cost, 2),
+                status=ReorderStatus.PLACED,
+            )
+            self._reorders[reorder.reorder_id] = reorder
         return reorder
 
     def get_reorder(self, reorder_id: str) -> Reorder:
@@ -147,11 +152,12 @@ class InMemoryErp:
         return list(self._reorders.values())
 
     def cancel_reorder(self, reorder_id: str) -> Reorder:
-        reorder = self.get_reorder(reorder_id)
-        if reorder.status is ReorderStatus.CANCELLED:
-            raise ErpRefusal(f"Reorder {reorder_id!r} is already cancelled")
-        cancelled = reorder.model_copy(update={"status": ReorderStatus.CANCELLED})
-        self._reorders[reorder_id] = cancelled
+        with self._reorders_lock:
+            reorder = self.get_reorder(reorder_id)
+            if reorder.status is ReorderStatus.CANCELLED:
+                raise ErpRefusal(f"Reorder {reorder_id!r} is already cancelled")
+            cancelled = reorder.model_copy(update={"status": ReorderStatus.CANCELLED})
+            self._reorders[reorder_id] = cancelled
         return cancelled
 
     def _check_sales_channel(self, sales_channel: str) -> None:

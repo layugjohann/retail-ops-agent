@@ -3,12 +3,14 @@ ERP and the ERP MCP server, so the fake can't drift from the server."""
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
 from retail_ops_agent.catalog import Catalog
-from retail_ops_agent.erp import ErpClient, ErpRefusal, InMemoryErp, ReorderStatus
+from retail_ops_agent.erp import ErpClient, ErpRefusal, InMemoryErp, Reorder, ReorderStatus
 from retail_ops_agent.erp_mcp import McpErpClient
 from retail_ops_agent.generator import generate_opening_stock
 from tests.conftest import SEED
@@ -82,6 +84,28 @@ def test_reorders_get_distinct_ids_and_are_listed_oldest_first(erp: ErpClient, c
 
     assert first.reorder_id != second.reorder_id
     assert erp.list_reorders() == [first, second]
+
+
+def test_reorders_placed_at_the_same_time_are_all_kept_with_distinct_ids(
+    erp: ErpClient, catalog: Catalog
+) -> None:
+    def place_one(_: int) -> Reorder:
+        return erp.place_reorder(sales_channel=catalog.stores[0].code, sku=catalog.skus[0].code, quantity=1)
+
+    # Switch threads as often as possible so concurrent Reorders really interleave; the MCP server
+    # runs each tool call on its own worker thread.
+    previous = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)
+    try:
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            placed = list(pool.map(place_one, range(200)))
+    finally:
+        sys.setswitchinterval(previous)
+
+    assert len({r.reorder_id for r in placed}) == len(placed)
+    assert sorted(erp.list_reorders(), key=lambda r: r.reorder_id) == sorted(
+        placed, key=lambda r: r.reorder_id
+    )
 
 
 @pytest.mark.parametrize(
