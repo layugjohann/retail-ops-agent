@@ -1,0 +1,37 @@
+{
+  "id": "date-mismatch-store-sales",
+  "description": "One sales Upload from ST06 has rows dated for another day; its other Upload that day is clean. The Defect has no Safe Fix, so the Upload is Quarantined and its Uploader is told what to correct.",
+  "tags": [
+    "intake",
+    "quarantine",
+    "date_mismatch",
+    "store"
+  ],
+  "seed": 42,
+  "first_day": "2026-03-02",
+  "last_day": "2026-03-02",
+  "sales_channels": [
+    "ST06"
+  ],
+  "planted": {
+    "defects": [
+      {
+        "sales_channel": "ST06",
+        "day": "2026-03-02",
+        "upload_kind": "sales",
+        "defect_kind": "date_mismatch"
+      }
+    ]
+  },
+  "expected": [
+    {
+      "sales_channel": "ST06",
+      "day": "2026-03-02",
+      "upload_kind": "sales",
+      "status": "quarantined",
+      "defect_kinds": [
+        "date_mismatch"
+      ]
+    }
+  ]
+}

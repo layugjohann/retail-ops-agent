@@ -4,6 +4,8 @@
 __pycache__/
 .venv/
 *.duckdb
+# Eval runs: Scorecards and the Uploads behind them. Copy a Scorecard elsewhere to keep it.
+evals/results/
 
 # sandcastle-pro
 .sandcastle/.env

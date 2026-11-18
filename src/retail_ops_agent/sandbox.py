@@ -37,8 +37,13 @@ def build_sandbox(
     defects: Sequence[DefectPlan] = (),
     resubmissions: Sequence[ResubmissionPlan] = (),
     upload_directory: Path | None = None,
+    sales_channels: Sequence[str] | None = None,
+    upload_kinds: Sequence[UploadKind] = tuple(UploadKind),
 ) -> OpsDay:
     """Submit every Sales Channel's sales and inventory Uploads for each day and process those Ops Days.
+
+    sales_channels and upload_kinds narrow which Uploads are submitted (every Sales Channel and both
+    kinds by default), so an eval can keep its model calls few.
 
     Uploads are clean except for the planned Defects. Each planned resubmission is submitted after
     its day's Ops Day and processed by the next one, so it Supersedes the first Upload. The
@@ -58,10 +63,11 @@ def build_sandbox(
         clock=clock,
     )
     channel_kinds = {c.code: c.kind for c in catalog.sales_channels}
+    submitting = [c for c in catalog.sales_channels if sales_channels is None or c.code in sales_channels]
     days_run = generated.history.days
     for day in days_run:
-        for channel in catalog.sales_channels:
-            for kind in UploadKind:
+        for channel in submitting:
+            for kind in upload_kinds:
                 ops_day.submit_upload(
                     sales_channel=channel.code,
                     day=day,

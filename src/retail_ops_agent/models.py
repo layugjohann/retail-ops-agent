@@ -21,13 +21,22 @@ def offline_intake_model() -> TestModel:
     return TestModel(custom_output_args={"defects": [], "uploader_message": None})
 
 
-def models_from_environment(env: Mapping[str, str]) -> tuple[Models, str]:
-    """Pick models from the environment. Returns the models and a label describing the choice."""
+def model_name_from_environment(env: Mapping[str, str]) -> str | None:
+    """The real model the environment's keys reach: RETAIL_OPS_MODEL, else free-tier Groq, else
+    free-tier Gemini. None when no key is set."""
     override = env.get("RETAIL_OPS_MODEL", "").strip()
     if override:
-        return Models(intake=override), override
+        return override
     if env.get("GROQ_API_KEY", "").strip():
-        return Models(intake=DEFAULT_GROQ_MODEL), DEFAULT_GROQ_MODEL
+        return DEFAULT_GROQ_MODEL
     if env.get("GOOGLE_API_KEY", "").strip() or env.get("GEMINI_API_KEY", "").strip():
-        return Models(intake=DEFAULT_GEMINI_MODEL), DEFAULT_GEMINI_MODEL
+        return DEFAULT_GEMINI_MODEL
+    return None
+
+
+def models_from_environment(env: Mapping[str, str]) -> tuple[Models, str]:
+    """Pick models from the environment. Returns the models and a label describing the choice."""
+    name = model_name_from_environment(env)
+    if name is not None:
+        return Models(intake=name), name
     return Models(intake=offline_intake_model()), "offline scripted model (no key set)"

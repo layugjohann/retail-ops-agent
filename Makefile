@@ -1,4 +1,4 @@
-.PHONY: check lint format-check typecheck test format dashboard
+.PHONY: check lint format-check typecheck test format dashboard evals
 
 check: lint format-check typecheck test
 
@@ -20,3 +20,8 @@ format:
 
 dashboard:
 	uv run streamlit run dashboard/app.py
+
+# Golden Scenarios against real free-tier models (needs keys in .env.local). Not part of check.
+# Pass options through ARGS, e.g. make evals ARGS="--tag quarantine --no-judge".
+evals:
+	uv run --env-file .env.local python -m retail_ops_agent.evals $(ARGS)

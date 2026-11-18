@@ -1,0 +1,17 @@
+{
+  "id": "clean-day",
+  "description": "Every Upload from a Store and the Online Shop is clean: nothing is Quarantined or Safe-Fixed and every Upload is loaded.",
+  "tags": [
+    "intake",
+    "clean",
+    "store",
+    "online-shop"
+  ],
+  "seed": 42,
+  "first_day": "2026-03-02",
+  "last_day": "2026-03-02",
+  "sales_channels": [
+    "ST01",
+    "ONLINE"
+  ]
+}

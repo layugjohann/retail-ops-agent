@@ -12,6 +12,7 @@ for the spec.
 uv sync
 make check       # ruff lint + format check, pyright, pytest
 make dashboard   # Streamlit dashboard over a seeded sandbox
+make evals       # Golden Scenarios against real free-tier models; see evals/README.md
 ```
 
 Model keys are optional and free-tier only; see `.env.example`.

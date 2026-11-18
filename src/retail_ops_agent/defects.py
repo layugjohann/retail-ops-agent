@@ -69,12 +69,17 @@ class Defect(BaseModel):
 
 def defect_location(defect: Defect) -> str:
     """Where a Defect is, in words: a row and column, a column, or the whole Upload."""
-    if defect.row == 1:
-        return f"the header (row 1), column {defect.column}" if defect.column else "the header (row 1)"
-    if defect.row is not None and defect.column:
-        return f"row {defect.row}, column {defect.column}"
-    if defect.row is not None:
-        return f"row {defect.row}"
-    if defect.column:
-        return f"column {defect.column}"
+    return location_in_words(defect.row, defect.column)
+
+
+def location_in_words(row: int | None, column: str | None) -> str:
+    """A row (row 1 is the header) and column in an Upload, in words; neither means the whole Upload."""
+    if row == 1:
+        return f"the header (row 1), column {column}" if column else "the header (row 1)"
+    if row is not None and column:
+        return f"row {row}, column {column}"
+    if row is not None:
+        return f"row {row}"
+    if column:
+        return f"column {column}"
     return "the whole file"

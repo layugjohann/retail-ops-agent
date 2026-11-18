@@ -1,0 +1,37 @@
+{
+  "id": "duplicate-day-store-inventory",
+  "description": "One inventory Upload from ST05 has the day's rows sent twice in one Upload; its other Upload that day is clean. The Defect has no Safe Fix, so the Upload is Quarantined and its Uploader is told what to correct.",
+  "tags": [
+    "intake",
+    "quarantine",
+    "duplicate_day",
+    "store"
+  ],
+  "seed": 42,
+  "first_day": "2026-03-02",
+  "last_day": "2026-03-02",
+  "sales_channels": [
+    "ST05"
+  ],
+  "planted": {
+    "defects": [
+      {
+        "sales_channel": "ST05",
+        "day": "2026-03-02",
+        "upload_kind": "inventory",
+        "defect_kind": "duplicate_day"
+      }
+    ]
+  },
+  "expected": [
+    {
+      "sales_channel": "ST05",
+      "day": "2026-03-02",
+      "upload_kind": "inventory",
+      "status": "quarantined",
+      "defect_kinds": [
+        "duplicate_day"
+      ]
+    }
+  ]
+}

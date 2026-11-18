@@ -1,0 +1,37 @@
+{
+  "id": "byte-order-mark-online-shop-sales",
+  "description": "One sales Upload from ONLINE has a UTF-8 byte order mark before the header; its other Upload that day is clean. The Defect has a Safe Fix, so the Upload is Safe-Fixed and loaded as if it were clean.",
+  "tags": [
+    "intake",
+    "safe-fix",
+    "byte_order_mark",
+    "online-shop"
+  ],
+  "seed": 42,
+  "first_day": "2026-03-02",
+  "last_day": "2026-03-02",
+  "sales_channels": [
+    "ONLINE"
+  ],
+  "planted": {
+    "defects": [
+      {
+        "sales_channel": "ONLINE",
+        "day": "2026-03-02",
+        "upload_kind": "sales",
+        "defect_kind": "byte_order_mark"
+      }
+    ]
+  },
+  "expected": [
+    {
+      "sales_channel": "ONLINE",
+      "day": "2026-03-02",
+      "upload_kind": "sales",
+      "status": "safe_fixed",
+      "defect_kinds": [
+        "byte_order_mark"
+      ]
+    }
+  ]
+}
