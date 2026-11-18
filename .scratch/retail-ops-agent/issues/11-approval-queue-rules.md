@@ -5,7 +5,8 @@
 **Blocked by:** 10
 **Stacked on:** issue/10-reorders-approval-queue
 
-**Status:** in-progress
+**Status:** awaiting-merge
+**Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/10
 
 - [ ] At most one pending Reorder per SKU and Sales Channel
 - [ ] A newer Investigation of the same SKU and Sales Channel replaces the pending Reorder (recorded in the Audit Log)
@@ -26,3 +27,7 @@ Usage: Implementer unknown; Review Session 14 input, 4,004 output, 48,298 cache 
 **Gate passed**: every command exited 0 (log: `.sandcastle/logs/gate-11-2026-11-18T20-14-18-198Z.log`).
 
 Usage: Body writer 2 input, 1,423 output, 36,158 cache creation, 11,615 cache read.
+
+**Pull Request opened**: https://github.com/layugjohann/retail-ops-agent/pull/10
+
+Stacked on Base Issue 10: this Pull Request targets `issue/10-reorders-approval-queue`, the branch of https://github.com/layugjohann/retail-ops-agent/pull/9. Merge that Pull Request first.
