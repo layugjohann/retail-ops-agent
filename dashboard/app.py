@@ -44,6 +44,30 @@ else:
     st.line_chart(by_channel)
     st.dataframe(sales, hide_index=True)
 
+st.header("Inventory")
+inventory_by_channel = pd.DataFrame([row.model_dump() for row in ops_day.inventory_by_sales_channel()])
+inventory_by_sku = pd.DataFrame([row.model_dump() for row in ops_day.inventory_by_sku()])
+if inventory_by_channel.empty or inventory_by_sku.empty:
+    st.info("No accepted inventory yet.")
+else:
+    st.subheader("Units on hand by Sales Channel")
+    st.line_chart(
+        inventory_by_channel.pivot_table(
+            index="day", columns="sales_channel_name", values="on_hand", aggfunc="sum"
+        )
+    )
+    latest = inventory_by_sku["day"].max()
+    st.subheader(f"Units on hand by SKU and Sales Channel, {latest}")
+    st.dataframe(
+        inventory_by_sku.pivot_table(
+            index=["sku", "sku_name", "category"],
+            columns="sales_channel_name",
+            values="on_hand",
+            aggfunc="sum",
+        ).reset_index(),
+        hide_index=True,
+    )
+
 st.header("Upload status")
 statuses = pd.DataFrame(
     [

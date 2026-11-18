@@ -7,7 +7,8 @@ from datetime import date, datetime
 
 import duckdb
 
-from retail_ops_agent.intake import Defect, StoreSalesLine
+from retail_ops_agent.defects import Defect
+from retail_ops_agent.upload_formats import SalesLine, StockLine
 from retail_ops_agent.uploads import Upload, UploadKind, UploadStatus
 from retail_ops_agent.views import UploadOutcome
 
@@ -23,12 +24,19 @@ CREATE TABLE IF NOT EXISTS uploads (
     processed_at  TIMESTAMP NOT NULL,
     defects       VARCHAR NOT NULL
 );
-CREATE TABLE IF NOT EXISTS store_sales (
+CREATE TABLE IF NOT EXISTS sales (
     day           DATE NOT NULL,
     sales_channel VARCHAR NOT NULL,
     sku           VARCHAR NOT NULL,
     quantity_sold INTEGER NOT NULL,
     net_sales     DECIMAL(12, 2) NOT NULL,
+    upload_id     VARCHAR NOT NULL
+);
+CREATE TABLE IF NOT EXISTS inventory (
+    day           DATE NOT NULL,
+    sales_channel VARCHAR NOT NULL,
+    sku           VARCHAR NOT NULL,
+    on_hand       INTEGER NOT NULL,
     upload_id     VARCHAR NOT NULL
 );
 """
@@ -60,9 +68,11 @@ class BiStore:
             ],
         )
 
-    def load_store_sales(self, upload: Upload, lines: list[StoreSalesLine]) -> None:
+    def load_sales(self, upload: Upload, lines: list[SalesLine]) -> None:
+        if not lines:
+            return
         self._db.executemany(
-            "INSERT INTO store_sales VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO sales VALUES (?, ?, ?, ?, ?, ?)",
             [
                 [
                     line.day,
@@ -74,6 +84,14 @@ class BiStore:
                 ]
                 for line in lines
             ],
+        )
+
+    def load_inventory(self, upload: Upload, lines: list[StockLine]) -> None:
+        if not lines:
+            return
+        self._db.executemany(
+            "INSERT INTO inventory VALUES (?, ?, ?, ?, ?)",
+            [[line.day, upload.sales_channel, line.sku, line.on_hand, upload.upload_id] for line in lines],
         )
 
     def uploads(self) -> list[UploadOutcome]:
@@ -98,8 +116,36 @@ class BiStore:
     def sales_by_sales_channel(self) -> list[tuple[date, str, int, float]]:
         rows = self._db.execute(
             "SELECT s.day, s.sales_channel, SUM(s.quantity_sold), SUM(s.net_sales) "
-            "FROM store_sales s JOIN uploads u USING (upload_id) "
+            "FROM sales s JOIN uploads u USING (upload_id) "
             "WHERE u.status IN ('accepted', 'safe_fixed') "
             "GROUP BY s.day, s.sales_channel ORDER BY s.day, s.sales_channel"
         ).fetchall()
         return [(r[0], r[1], int(r[2]), float(r[3])) for r in rows]
+
+    def inventory_by_sales_channel(self) -> list[tuple[date, str, int, int]]:
+        """Per day and Sales Channel: SKUs stocked and total units on hand."""
+        rows = self._db.execute(
+            "SELECT i.day, i.sales_channel, COUNT(*) FILTER (WHERE i.on_hand > 0), SUM(i.on_hand) "
+            "FROM inventory i JOIN uploads u USING (upload_id) "
+            "WHERE u.status IN ('accepted', 'safe_fixed') "
+            "GROUP BY i.day, i.sales_channel ORDER BY i.day, i.sales_channel"
+        ).fetchall()
+        return [(r[0], r[1], int(r[2]), int(r[3])) for r in rows]
+
+    def latest_inventory_day(self) -> date | None:
+        row = self._db.execute(
+            "SELECT MAX(i.day) FROM inventory i JOIN uploads u USING (upload_id) "
+            "WHERE u.status IN ('accepted', 'safe_fixed')"
+        ).fetchone()
+        return row[0] if row else None
+
+    def inventory_by_sku(self, day: date) -> list[tuple[str, str, int]]:
+        """Per Sales Channel and SKU: units on hand at the end of the day."""
+        rows = self._db.execute(
+            "SELECT i.sales_channel, i.sku, SUM(i.on_hand) "
+            "FROM inventory i JOIN uploads u USING (upload_id) "
+            "WHERE u.status IN ('accepted', 'safe_fixed') AND i.day = ? "
+            "GROUP BY i.sales_channel, i.sku ORDER BY i.sales_channel, i.sku",
+            [day],
+        ).fetchall()
+        return [(r[0], r[1], int(r[2])) for r in rows]

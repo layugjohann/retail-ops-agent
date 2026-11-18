@@ -18,7 +18,13 @@ from retail_ops_agent.erp import ErpClient
 from retail_ops_agent.intake import run_intake
 from retail_ops_agent.notifier import Notification, Notifier
 from retail_ops_agent.uploads import Upload, UploadKind, UploadStatus
-from retail_ops_agent.views import OpsDayOutcome, SalesBySalesChannel, UploadOutcome
+from retail_ops_agent.views import (
+    InventoryBySalesChannel,
+    InventoryBySku,
+    OpsDayOutcome,
+    SalesBySalesChannel,
+    UploadOutcome,
+)
 
 
 @dataclass(frozen=True)
@@ -75,16 +81,20 @@ class OpsDay:
         """Process every not-yet-processed Upload for the day: Intake, then Load."""
         processed = self._bi.processed_upload_ids()
         known_skus = frozenset(s.code for s in self._erp.list_skus())
+        channel_kinds = {c.code: c.kind for c in self._erp.list_sales_channels()}
         outcomes: list[UploadOutcome] = []
         for upload in self._data_source.uploads_for(day):
             if upload.upload_id in processed:
                 continue
-            result = run_intake(upload, known_skus, self._models.intake)
+            result = run_intake(upload, channel_kinds[upload.sales_channel], known_skus, self._models.intake)
             status = UploadStatus.QUARANTINED if result.defects else UploadStatus.ACCEPTED
             now = self._clock.now()
             self._bi.record_upload(upload, status, now, result.defects)
             if status is UploadStatus.ACCEPTED:
-                self._bi.load_store_sales(upload, result.lines)
+                if upload.kind is UploadKind.SALES:
+                    self._bi.load_sales(upload, result.sales)
+                else:
+                    self._bi.load_inventory(upload, result.stock)
             elif result.uploader_message:
                 self._notifier.send(
                     Notification(
@@ -114,7 +124,7 @@ class OpsDay:
         return self._bi.uploads()
 
     def sales_by_sales_channel(self) -> list[SalesBySalesChannel]:
-        names = {c.code: c.name for c in self._erp.list_sales_channels()}
+        names = self._sales_channel_names()
         return [
             SalesBySalesChannel(
                 day=day,
@@ -125,3 +135,39 @@ class OpsDay:
             )
             for day, code, quantity, net_sales in self._bi.sales_by_sales_channel()
         ]
+
+    def inventory_by_sales_channel(self) -> list[InventoryBySalesChannel]:
+        names = self._sales_channel_names()
+        return [
+            InventoryBySalesChannel(
+                day=day,
+                sales_channel=code,
+                sales_channel_name=names.get(code, code),
+                skus_in_stock=skus_in_stock,
+                on_hand=on_hand,
+            )
+            for day, code, skus_in_stock, on_hand in self._bi.inventory_by_sales_channel()
+        ]
+
+    def inventory_by_sku(self, day: date | None = None) -> list[InventoryBySku]:
+        """Units on hand per Sales Channel and SKU for the day; the latest inventory day by default."""
+        day = day or self._bi.latest_inventory_day()
+        if day is None:
+            return []
+        names = self._sales_channel_names()
+        skus = {s.code: s for s in self._erp.list_skus()}
+        return [
+            InventoryBySku(
+                day=day,
+                sales_channel=code,
+                sales_channel_name=names.get(code, code),
+                sku=sku,
+                sku_name=skus[sku].name if sku in skus else sku,
+                category=skus[sku].category if sku in skus else "",
+                on_hand=on_hand,
+            )
+            for code, sku, on_hand in self._bi.inventory_by_sku(day)
+        ]
+
+    def _sales_channel_names(self) -> dict[str, str]:
+        return {c.code: c.name for c in self._erp.list_sales_channels()}
