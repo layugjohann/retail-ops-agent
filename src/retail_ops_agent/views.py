@@ -26,6 +26,18 @@ class UploadOutcome(BaseModel):
     defects: list[Defect]
 
 
+class UploaderMessage(BaseModel):
+    """A plain-language message Intake sent an Uploader through the Notifier about one Upload."""
+
+    model_config = ConfigDict(frozen=True)
+
+    upload_id: str
+    sent_at: datetime
+    recipient: str
+    subject: str
+    body: str
+
+
 class OpsDayOutcome(BaseModel):
     """What happened in one Ops Day."""
 
@@ -34,6 +46,7 @@ class OpsDayOutcome(BaseModel):
     day: date
     uploads: list[UploadOutcome]
     audit_entries: list[AuditEntry]
+    uploader_messages: list[UploaderMessage]
 
 
 class SalesBySalesChannel(BaseModel):

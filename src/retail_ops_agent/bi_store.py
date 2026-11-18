@@ -10,7 +10,7 @@ import duckdb
 from retail_ops_agent.defects import Defect
 from retail_ops_agent.upload_formats import SalesLine, StockLine
 from retail_ops_agent.uploads import Upload, UploadKind, UploadStatus
-from retail_ops_agent.views import UploadOutcome
+from retail_ops_agent.views import UploaderMessage, UploadOutcome
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS uploads (
@@ -38,6 +38,13 @@ CREATE TABLE IF NOT EXISTS inventory (
     sku           VARCHAR NOT NULL,
     on_hand       INTEGER NOT NULL,
     upload_id     VARCHAR NOT NULL
+);
+CREATE TABLE IF NOT EXISTS uploader_messages (
+    upload_id     VARCHAR NOT NULL,
+    sent_at       TIMESTAMP NOT NULL,
+    recipient     VARCHAR NOT NULL,
+    subject       VARCHAR NOT NULL,
+    body          VARCHAR NOT NULL
 );
 """
 
@@ -85,6 +92,22 @@ class BiStore:
         """Take an Upload's rows out of the BI data."""
         self._db.execute("DELETE FROM sales WHERE upload_id = ?", [upload_id])
         self._db.execute("DELETE FROM inventory WHERE upload_id = ?", [upload_id])
+
+    def record_uploader_message(self, message: UploaderMessage) -> None:
+        self._db.execute(
+            "INSERT INTO uploader_messages VALUES (?, ?, ?, ?, ?)",
+            [message.upload_id, message.sent_at, message.recipient, message.subject, message.body],
+        )
+
+    def uploader_messages(self) -> list[UploaderMessage]:
+        """Every message sent to an Uploader, newest first."""
+        rows = self._db.execute(
+            "SELECT upload_id, sent_at, recipient, subject, body FROM uploader_messages ORDER BY rowid DESC"
+        ).fetchall()
+        return [
+            UploaderMessage(upload_id=r[0], sent_at=r[1], recipient=r[2], subject=r[3], body=r[4])
+            for r in rows
+        ]
 
     def load_sales(self, upload: Upload, lines: list[SalesLine]) -> None:
         if not lines:

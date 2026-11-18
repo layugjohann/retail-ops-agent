@@ -24,12 +24,14 @@ class ActionTier(IntEnum):
 
 class AuditAction(StrEnum):
     SAFE_FIX = "safe_fix"
+    QUARANTINE = "quarantine"
     UNDO = "undo"
 
 
 # Each Action's Tier, by fixed rule. The model never sets a Tier (ADR 0002).
 ACTION_TIERS: dict[AuditAction, ActionTier] = {
     AuditAction.SAFE_FIX: ActionTier.INTERNAL,
+    AuditAction.QUARANTINE: ActionTier.INTERNAL,
     AuditAction.UNDO: ActionTier.INTERNAL,
 }
 
@@ -38,6 +40,9 @@ class UndoOperation(StrEnum):
     # Take the Upload back to how it arrived: its Safe-Fixed rows leave the BI data and, with its
     # Defect no longer fixed, it is held in Quarantine.
     RESTORE_ORIGINAL_UPLOAD = "restore_original_upload"
+    # Release the Upload from Quarantine: the rows that passed every check are loaded into the BI
+    # data and the Upload is accepted; rows with Defects stay out.
+    RELEASE_UPLOAD = "release_upload"
     # Reinstate the entry an undo reversed.
     REINSTATE_ENTRY = "reinstate_entry"
 
