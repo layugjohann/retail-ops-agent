@@ -1,0 +1,57 @@
+{
+  "id": "resubmission-corrects-quarantine",
+  "description": "ST03's sales Upload is missing a column and is Quarantined; the Uploader resends it corrected, which Supersedes it and is accepted.",
+  "tags": [
+    "intake",
+    "resubmission",
+    "quarantine",
+    "missing_column",
+    "store"
+  ],
+  "seed": 42,
+  "first_day": "2026-03-02",
+  "last_day": "2026-03-02",
+  "sales_channels": [
+    "ST03"
+  ],
+  "upload_kinds": [
+    "sales"
+  ],
+  "planted": {
+    "defects": [
+      {
+        "sales_channel": "ST03",
+        "day": "2026-03-02",
+        "upload_kind": "sales",
+        "defect_kind": "missing_column"
+      }
+    ],
+    "resubmissions": [
+      {
+        "sales_channel": "ST03",
+        "day": "2026-03-02",
+        "upload_kind": "sales",
+        "resubmission_kind": "corrected"
+      }
+    ]
+  },
+  "expected": [
+    {
+      "sales_channel": "ST03",
+      "day": "2026-03-02",
+      "upload_kind": "sales",
+      "submission": 1,
+      "status": "superseded",
+      "defect_kinds": [
+        "missing_column"
+      ]
+    },
+    {
+      "sales_channel": "ST03",
+      "day": "2026-03-02",
+      "upload_kind": "sales",
+      "submission": 2,
+      "status": "accepted"
+    }
+  ]
+}

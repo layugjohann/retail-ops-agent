@@ -1,0 +1,44 @@
+{
+  "id": "resubmission-changes-figures",
+  "description": "The Online Shop resends its clean sales Upload with revised figures: the first is Superseded and only the revised figures are in the BI data.",
+  "tags": [
+    "intake",
+    "resubmission",
+    "online-shop"
+  ],
+  "seed": 42,
+  "first_day": "2026-03-02",
+  "last_day": "2026-03-02",
+  "sales_channels": [
+    "ONLINE"
+  ],
+  "upload_kinds": [
+    "sales"
+  ],
+  "planted": {
+    "resubmissions": [
+      {
+        "sales_channel": "ONLINE",
+        "day": "2026-03-02",
+        "upload_kind": "sales",
+        "resubmission_kind": "changed"
+      }
+    ]
+  },
+  "expected": [
+    {
+      "sales_channel": "ONLINE",
+      "day": "2026-03-02",
+      "upload_kind": "sales",
+      "submission": 1,
+      "status": "superseded"
+    },
+    {
+      "sales_channel": "ONLINE",
+      "day": "2026-03-02",
+      "upload_kind": "sales",
+      "submission": 2,
+      "status": "accepted"
+    }
+  ]
+}

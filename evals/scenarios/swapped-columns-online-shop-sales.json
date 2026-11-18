@@ -1,0 +1,37 @@
+{
+  "id": "swapped-columns-online-shop-sales",
+  "description": "One sales Upload from ONLINE has two columns' values swapped under unchanged headers; its other Upload that day is clean. The Defect has no Safe Fix, so the Upload is Quarantined and its Uploader is told what to correct.",
+  "tags": [
+    "intake",
+    "quarantine",
+    "swapped_columns",
+    "online-shop"
+  ],
+  "seed": 42,
+  "first_day": "2026-03-02",
+  "last_day": "2026-03-02",
+  "sales_channels": [
+    "ONLINE"
+  ],
+  "planted": {
+    "defects": [
+      {
+        "sales_channel": "ONLINE",
+        "day": "2026-03-02",
+        "upload_kind": "sales",
+        "defect_kind": "swapped_columns"
+      }
+    ]
+  },
+  "expected": [
+    {
+      "sales_channel": "ONLINE",
+      "day": "2026-03-02",
+      "upload_kind": "sales",
+      "status": "quarantined",
+      "defect_kinds": [
+        "swapped_columns"
+      ]
+    }
+  ]
+}

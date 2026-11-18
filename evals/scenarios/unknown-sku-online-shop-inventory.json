@@ -1,0 +1,37 @@
+{
+  "id": "unknown-sku-online-shop-inventory",
+  "description": "One inventory Upload from ONLINE has an SKU not in the catalog; its other Upload that day is clean. The Defect has no Safe Fix, so the Upload is Quarantined and its Uploader is told what to correct.",
+  "tags": [
+    "intake",
+    "quarantine",
+    "unknown_sku",
+    "online-shop"
+  ],
+  "seed": 42,
+  "first_day": "2026-03-02",
+  "last_day": "2026-03-02",
+  "sales_channels": [
+    "ONLINE"
+  ],
+  "planted": {
+    "defects": [
+      {
+        "sales_channel": "ONLINE",
+        "day": "2026-03-02",
+        "upload_kind": "inventory",
+        "defect_kind": "unknown_sku"
+      }
+    ]
+  },
+  "expected": [
+    {
+      "sales_channel": "ONLINE",
+      "day": "2026-03-02",
+      "upload_kind": "inventory",
+      "status": "quarantined",
+      "defect_kinds": [
+        "unknown_sku"
+      ]
+    }
+  ]
+}

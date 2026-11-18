@@ -145,3 +145,17 @@ _Avoid_: Time saved, ROI, efficiency
 **Audit Log**:
 The permanent record of every Action taken, who or what took it, and how to undo it.
 _Avoid_: History, activity log, trail
+
+### Evals
+
+**Golden Scenario**:
+One seeded eval case: its tags, seed, day range, which Sales Channels send which Uploads, the Defects and resubmissions planted in them, and the outcome expected for each Upload. The eval harness drives it through the Ops Day boundary and grades the result against the Ground Truth.
+_Avoid_: Test case, fixture, example
+
+**Scorecard**:
+The machine-readable record of one eval run: the models used, each Golden Scenario's grader results and judge verdicts, and the totals.
+_Avoid_: Report, results file, leaderboard
+
+**Rubric**:
+The written criteria an LLM judge grades free text against, giving one pass or fail per criterion.
+_Avoid_: Checklist, guidelines, score sheet

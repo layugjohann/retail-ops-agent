@@ -1,0 +1,37 @@
+{
+  "id": "wrong-delimiter-store-inventory",
+  "description": "One inventory Upload from ST04 has values separated by something other than commas; its other Upload that day is clean. The Defect has a Safe Fix, so the Upload is Safe-Fixed and loaded as if it were clean.",
+  "tags": [
+    "intake",
+    "safe-fix",
+    "wrong_delimiter",
+    "store"
+  ],
+  "seed": 42,
+  "first_day": "2026-03-02",
+  "last_day": "2026-03-02",
+  "sales_channels": [
+    "ST04"
+  ],
+  "planted": {
+    "defects": [
+      {
+        "sales_channel": "ST04",
+        "day": "2026-03-02",
+        "upload_kind": "inventory",
+        "defect_kind": "wrong_delimiter"
+      }
+    ]
+  },
+  "expected": [
+    {
+      "sales_channel": "ST04",
+      "day": "2026-03-02",
+      "upload_kind": "inventory",
+      "status": "safe_fixed",
+      "defect_kinds": [
+        "wrong_delimiter"
+      ]
+    }
+  ]
+}

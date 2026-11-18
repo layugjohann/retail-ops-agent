@@ -1,0 +1,37 @@
+{
+  "id": "impossible-quantity-store-sales",
+  "description": "One sales Upload from ST01 has an impossible quantity; its other Upload that day is clean. The Defect has no Safe Fix, so the Upload is Quarantined and its Uploader is told what to correct.",
+  "tags": [
+    "intake",
+    "quarantine",
+    "impossible_quantity",
+    "store"
+  ],
+  "seed": 42,
+  "first_day": "2026-03-02",
+  "last_day": "2026-03-02",
+  "sales_channels": [
+    "ST01"
+  ],
+  "planted": {
+    "defects": [
+      {
+        "sales_channel": "ST01",
+        "day": "2026-03-02",
+        "upload_kind": "sales",
+        "defect_kind": "impossible_quantity"
+      }
+    ]
+  },
+  "expected": [
+    {
+      "sales_channel": "ST01",
+      "day": "2026-03-02",
+      "upload_kind": "sales",
+      "status": "quarantined",
+      "defect_kinds": [
+        "impossible_quantity"
+      ]
+    }
+  ]
+}
