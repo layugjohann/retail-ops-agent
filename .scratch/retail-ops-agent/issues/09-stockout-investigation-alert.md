@@ -5,7 +5,8 @@
 **Blocked by:** 02, 03
 **Stacked on:** issue/08-erp-mcp-server
 
-**Status:** in-progress
+**Status:** awaiting-merge
+**Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/8
 
 - [ ] Stockout risk detection is deterministic and needs no model
 - [ ] The generator can plant a stockout risk with a cause the data reveals; it is recorded in the ground truth
@@ -30,3 +31,7 @@ Usage: Implementer 84 input, 66,760 output, 158,921 cache creation, 4,915,333 ca
 **Gate passed**: every command exited 0 (log: `.sandcastle/logs/gate-09-2026-11-18T17-55-22-863Z.log`).
 
 Usage: Body writer 2 input, 1,852 output, 58,850 cache creation, 11,615 cache read.
+
+**Pull Request opened**: https://github.com/layugjohann/retail-ops-agent/pull/8
+
+Stacked on Base Issue 08: this Pull Request targets `issue/08-erp-mcp-server`, the branch of https://github.com/layugjohann/retail-ops-agent/pull/7. Merge that Pull Request first.
