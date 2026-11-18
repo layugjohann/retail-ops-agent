@@ -5,7 +5,8 @@
 **Blocked by:** 04
 **Stacked on:** issue/04-quarantine-and-uploader-messages
 
-**Status:** in-progress
+**Status:** awaiting-merge
+**Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/5
 
 - [ ] Resubmitting replaces the earlier Upload's data in the BI data; nothing is double-counted
 - [ ] The earlier Upload's status is Superseded, and the status view shows its history
@@ -27,3 +28,7 @@ Usage: Implementer 52 input, 31,001 output, 99,015 cache creation, 2,125,798 cac
 **Gate passed**: every command exited 0 (log: `.sandcastle/logs/gate-05-2026-11-18T07-17-30-091Z.log`).
 
 Usage: Body writer 2 input, 1,489 output, 42,390 cache creation, 11,615 cache read.
+
+**Pull Request opened**: https://github.com/layugjohann/retail-ops-agent/pull/5
+
+Stacked on Base Issue 04: this Pull Request targets `issue/04-quarantine-and-uploader-messages`, the branch of https://github.com/layugjohann/retail-ops-agent/pull/4. Merge that Pull Request first.
