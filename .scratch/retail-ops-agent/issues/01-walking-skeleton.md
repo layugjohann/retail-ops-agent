@@ -4,7 +4,7 @@
 
 **Blocked by:** None
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Python project managed by uv, with ruff (lint and format check), pyright and pytest. `make check` runs all of them and is the sandcastle-pro Gate
 - [ ] `.env.example` lists the optional free-tier model keys (Groq, Gemini); nothing requires a paid service (ADR 0001)
@@ -17,3 +17,16 @@
 - [ ] Code uses glossary terms (Sales Channel, Store, Online Shop, SKU, Supplier, Upload, Ops Day)
 
 ## Comments
+
+Usage: Implementer 42 input, 32,707 output, 71,017 cache creation, 1,182,810 cache read; Review Session 14 input, 4,269 output, 230,630 cache creation, 1,445,627 cache read.
+
+**Review Session: Non-critical Findings**
+
+- intake.run_intake adds any Defects the model reports to the deterministic ones, and they are never checked against the Upload. A real model that invents a Defect would Quarantine a clean Upload, which goes against the spec's 'clean Upload never Quarantined'. Consider limiting model-reported Defects to ones the deterministic checks can confirm, or using the model only to write the Uploader message.
+- ops_day.run_ops_day already Quarantines Uploads, but it writes no Audit Log entry and sends no Notification when the model gives no uploader_message. The offline model always gives none, so with it a Quarantined Upload is silent. Tickets 03 and 04 cover this; flagged so those tickets account for the path that already exists.
+- .env.example says to copy it to .env.local, but nothing loads .env.local. models_from_environment reads only os.environ, so keys put there have no effect unless the user exports them.
+- generator/sales.py generate_store_sales checks `store.kind is not SalesChannelKind.STORE` even though it already selected the store from catalog.stores, so the check can never fail. It is dead code.
+
+**Gate passed**: every command exited 0 (log: `.sandcastle/logs/gate-01-2026-11-18T05-47-53-996Z.log`).
+
+Usage: Body writer 2 input, 1,221 output, 224,252 cache creation, 11,615 cache read.
