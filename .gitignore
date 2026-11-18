@@ -4,3 +4,9 @@
 __pycache__/
 .venv/
 *.duckdb
+
+# sandcastle-pro
+.sandcastle/.env
+.sandcastle/logs/
+.sandcastle/worktrees/
+/sandcastle-pro/

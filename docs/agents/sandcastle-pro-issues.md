@@ -1,0 +1,59 @@
+# Issue format for sandcastle-pro
+
+Runs read Issues from local markdown files. Plan Specs and Issues in a normal Claude Code session;
+a Run only implements and reviews them.
+
+## Files
+
+- One feature per directory: `.scratch/<feature>/`.
+- The Spec is `.scratch/<feature>/spec.md`.
+- One Issue per file: `.scratch/<feature>/issues/NN-slug.md`, numbered from `01`.
+  The Run works on the Issue's own branch, `issue/NN-slug`.
+
+## Lines near the top
+
+- `Status:` the Issue's status (below). Required: an Issue without a known status is never picked.
+- `Blocked by:` numbers of Issues in the same `issues/` directory that must be `done` first, e.g. `Blocked by: 02, 05`. Missing or `None` means unblocked.
+  With `"stack": true` in the config (which needs `"pullRequest": true`), an Issue whose only blocker that is not
+  `done` is `awaiting-merge` starts as a Stacked Issue: its branch is cut from that blocker's branch, its Review Session
+  only sees its own commits, and its Pull Request targets that branch. Merge the chain in order, with merge commits.
+  With `"stack": "run"`, every Issue starts as a Stacked Issue on the top of the Stack, whether or not that Issue is
+  one of its blockers; an `awaiting-merge` blocker must be in the Stack below the top. Merge the Stack from the bottom up.
+- `Stacked on:` the branch of the Base Issue a Stacked Issue is built on, e.g. `Stacked on: issue/01-first`. Set by a Run; leave it
+  alone. Without it, the Issue is based on the target branch.
+- `Spec:` the Spec's path from the repo root, e.g. `Spec: .scratch/<feature>/spec.md`.
+  Without it, `spec.md` next to the `issues/` directory is used.
+- `Model:` optional; overrides the configured model for this Issue only, e.g. `Model: claude-sonnet-5-5`.
+  Put it above any `## Comments` heading; below it, it is ignored.
+
+Each label may also be written in bold, `**Status:** ready-for-agent` or `**Status**: ready-for-agent`.
+A Run keeps the style it finds: when it rewrites a bold line, the line stays bold. A line it adds (`Stacked on:`,
+`Pull Request:`, `Paused session:`, `Paused stage:`) follows the style of the header around it: it is bold when the
+`Status:` or `Blocked by:` line is.
+
+The rest of the file describes the work: what to build, and a checklist of acceptance criteria.
+
+## Statuses
+
+Set by you:
+
+- `needs-triage`: not yet evaluated.
+- `ready-for-agent`: fully specified. A Run picks the lowest-numbered unblocked one.
+- `ready-for-human`: needs a person. A Run also sets it when the Gate fails, leaving the branch as it is.
+- `wontfix`: will not be done.
+
+Set by a Run:
+
+- `in-progress`: a Run is working on it.
+- `paused`: the Run hit the usage limit. The next Run resumes it before any new Issue.
+  The `Paused session:` and `Paused stage:` lines record where to continue; leave them alone.
+- `needs-info`: the Review Session believes the Spec itself is wrong. Read its comment, fix the Spec or Issue, and set `ready-for-agent` again.
+- `awaiting-merge`: passed the Gate. Review and merge `issue/NN-slug` yourself. With `"pullRequest": true` in the
+  config, the Run publishes it as a Pull Request and records the URL on a `Pull Request:` line; leave that line alone.
+- `done`: merged, detected at the start of the next Run: its Pull Request is merged on GitHub or, without one,
+  its branch is merged into the target branch.
+
+## Comments
+
+A Run appends Non-critical Findings, Gate failures and token usage under a `## Comments` heading at the
+bottom of the file, creating it if needed.
