@@ -12,7 +12,7 @@ from pydantic_ai.models.test import TestModel
 
 from retail_ops_agent.ops_day import Models
 
-DEFAULT_GROQ_MODEL = "groq:llama-3.3-70b-versatile"
+DEFAULT_GROQ_MODEL = "groq:openai/gpt-oss-120b"
 DEFAULT_GEMINI_MODEL = "google:gemini-3.5-flash-lite"
 
 
