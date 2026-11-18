@@ -48,6 +48,22 @@ _Avoid_: Product, item, article
 One CSV file a Client team submits for one Sales Channel and one day, either sales or inventory.
 _Avoid_: File, import, data drop
 
+**Order Line**:
+One line of the Online Shop's sales Upload: one SKU within one order, with its quantity, line total and a status of paid, cancelled or refunded. Only paid Order Lines count as sales.
+_Avoid_: Transaction, order row
+
+**Stock Snapshot**:
+The Online Shop's inventory Upload: units available per SKU at a snapshot time, under the Online Shop's own column headers.
+_Avoid_: Stock export, stock dump
+
+**Lead Time**:
+The number of days between ordering a SKU from its Supplier and the stock arriving at the Sales Channel.
+_Avoid_: Delivery time, turnaround
+
+**Restock**:
+Stock of one SKU arriving at one Sales Channel from its Supplier, one Lead Time after it was ordered; a Reorder becomes a Restock when it arrives.
+_Avoid_: Delivery, replenishment
+
 **Uploader**:
 The Client staff member who submitted an Upload and is told about its Defects.
 _Avoid_: User, submitter, sender

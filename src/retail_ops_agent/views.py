@@ -6,7 +6,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict
 
-from retail_ops_agent.intake import Defect
+from retail_ops_agent.defects import Defect
 from retail_ops_agent.uploads import UploadKind, UploadStatus
 
 
@@ -44,3 +44,29 @@ class SalesBySalesChannel(BaseModel):
     sales_channel_name: str
     quantity_sold: int
     net_sales: float
+
+
+class InventoryBySalesChannel(BaseModel):
+    """Accepted inventory for one Sales Channel at the end of one day."""
+
+    model_config = ConfigDict(frozen=True)
+
+    day: date
+    sales_channel: str
+    sales_channel_name: str
+    skus_in_stock: int
+    on_hand: int
+
+
+class InventoryBySku(BaseModel):
+    """Accepted units on hand of one SKU at one Sales Channel at the end of one day."""
+
+    model_config = ConfigDict(frozen=True)
+
+    day: date
+    sales_channel: str
+    sales_channel_name: str
+    sku: str
+    sku_name: str
+    category: str
+    on_hand: int
