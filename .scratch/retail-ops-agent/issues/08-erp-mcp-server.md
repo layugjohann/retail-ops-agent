@@ -5,7 +5,8 @@
 **Blocked by:** 01
 **Stacked on:** issue/07-eval-harness-intake-evals
 
-**Status:** in-progress
+**Status:** awaiting-merge
+**Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/7
 
 - [ ] The MCP server exposes: read SKUs, stock levels and Suppliers; place, read and cancel Reorders
 - [ ] It is seeded from the same Cobalt Home catalog
@@ -28,3 +29,7 @@ Usage: Implementer 52 input, 20,730 output, 76,892 cache creation, 1,685,518 cac
 **Gate passed**: every command exited 0 (log: `.sandcastle/logs/gate-08-2026-11-18T17-30-59-038Z.log`).
 
 Usage: Body writer 2 input, 1,227 output, 38,426 cache creation, 11,615 cache read.
+
+**Pull Request opened**: https://github.com/layugjohann/retail-ops-agent/pull/7
+
+Stacked on Base Issue 07: this Pull Request targets `issue/07-eval-harness-intake-evals`, the branch of https://github.com/layugjohann/retail-ops-agent/pull/6. Merge that Pull Request first.
