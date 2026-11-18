@@ -9,10 +9,14 @@ authors = [
 requires-python = ">=3.13"
 dependencies = [
     "duckdb>=2.0.0",
+    "mcp>=2.3.0",
     "pandas>=3.1.1",
     "pydantic-ai-slim[google,groq]>=2.70.0",
     "streamlit>=1.67.0",
 ]
+
+[project.scripts]
+retail-ops-erp = "retail_ops_agent.erp_server:main"
 
 [build-system]
 requires = ["uv_build>=0.13.7,<0.14.0"]
