@@ -5,7 +5,8 @@
 **Blocked by:** 01
 **Stacked on:** issue/02-all-upload-formats
 
-**Status:** in-progress
+**Status:** awaiting-merge
+**Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/3
 
 - [ ] A fixed table, not the model, decides which Defect kinds have a Safe Fix
 - [ ] At least the obvious safe-fixable Defects (for example renamed headers that match unambiguously, stray whitespace, a trivial delimiter issue) are planted, detected and fixed
@@ -32,3 +33,7 @@ Usage: Implementer 60 input, 47,691 output, 112,625 cache creation, 2,755,275 ca
 **Gate passed**: every command exited 0 (log: `.sandcastle/logs/gate-03-2026-11-18T06-53-58-608Z.log`).
 
 Usage: Body writer 2 input, 1,746 output, 48,135 cache creation, 11,615 cache read.
+
+**Pull Request opened**: https://github.com/layugjohann/retail-ops-agent/pull/3
+
+Stacked on Base Issue 02: this Pull Request targets `issue/02-all-upload-formats`, the branch of https://github.com/layugjohann/retail-ops-agent/pull/2. Merge that Pull Request first.
