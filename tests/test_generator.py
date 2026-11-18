@@ -4,11 +4,24 @@ import csv
 import io
 from collections import defaultdict
 from datetime import date, timedelta
+from pathlib import Path
+
+import pytest
 
 from retail_ops_agent.catalog import SalesChannelKind
-from retail_ops_agent.generator import History, generate_catalog, generate_history, upload_csv
+from retail_ops_agent.defects import DefectKind
+from retail_ops_agent.generator import (
+    PLANTABLE_DEFECTS,
+    DefectPlan,
+    GroundTruth,
+    History,
+    generate_catalog,
+    generate_history,
+    generate_uploads,
+    upload_csv,
+)
 from retail_ops_agent.upload_formats import OrderLineStatus
-from retail_ops_agent.uploads import UploadKind
+from retail_ops_agent.uploads import UploadKind, UploadStatus
 
 
 def test_catalog_has_the_clients_shape() -> None:
@@ -165,3 +178,80 @@ def test_weekends_sell_more_than_midweek() -> None:
         )
 
     assert total(5) > 1.2 * total(1)
+
+
+_PLAN_DAY = date(2026, 6, 1)
+
+
+def _plans() -> list[DefectPlan]:
+    return [
+        DefectPlan(sales_channel=channel, day=_PLAN_DAY, upload_kind=kind, defect_kind=defect)
+        for channel, kind, defect in [
+            ("ST01", UploadKind.SALES, DefectKind.RENAMED_COLUMN),
+            ("ST02", UploadKind.INVENTORY, DefectKind.STRAY_WHITESPACE),
+            ("ONLINE", UploadKind.SALES, DefectKind.WRONG_DELIMITER),
+            ("ONLINE", UploadKind.INVENTORY, DefectKind.BYTE_ORDER_MARK),
+        ]
+    ]
+
+
+def test_planting_is_deterministic_and_leaves_other_uploads_clean() -> None:
+    history = generate_history(generate_catalog(3), _PLAN_DAY, 1)
+
+    first = generate_uploads(history, _plans())
+    second = generate_uploads(history, _plans())
+
+    assert first.ground_truth == second.ground_truth
+    planted = {(p.sales_channel, p.upload_kind) for p in _plans()}
+    for channel in history.catalog.sales_channels:
+        for kind in UploadKind:
+            content = first.content(channel.code, _PLAN_DAY, kind)
+            assert content == second.content(channel.code, _PLAN_DAY, kind)
+            clean = upload_csv(history, channel.code, _PLAN_DAY, kind)
+            assert (content != clean) == ((channel.code, kind) in planted)
+
+
+def test_the_ground_truth_record_matches_the_planted_uploads(tmp_path: Path) -> None:
+    history = generate_history(generate_catalog(3), _PLAN_DAY, 1)
+    generated = generate_uploads(history, _plans())
+    truth = {(p.sales_channel, p.upload_kind): p for p in generated.ground_truth.defects}
+
+    assert len(truth) == len(_plans())
+    assert all(p.has_safe_fix and p.expected_status is UploadStatus.SAFE_FIXED for p in truth.values())
+
+    renamed = truth[("ST01", UploadKind.SALES)]
+    header = generated.content("ST01", _PLAN_DAY, UploadKind.SALES).split("\n", 1)[0].split(",")
+    assert renamed.row == 1
+    assert renamed.column not in header
+    assert len(header) == 5
+
+    padded = truth[("ST02", UploadKind.INVENTORY)]
+    columns, rows = _rows(generated.content("ST02", _PLAN_DAY, UploadKind.INVENTORY))
+    assert padded.row is not None and padded.column in columns
+    value = rows[padded.row - 2][padded.column]
+    assert value != value.strip()
+
+    assert "," not in generated.content("ONLINE", _PLAN_DAY, UploadKind.SALES)
+    assert generated.content("ONLINE", _PLAN_DAY, UploadKind.INVENTORY).startswith("\ufeff")
+
+    path = tmp_path / "ground_truth.json"
+    generated.ground_truth.write(path)
+    assert GroundTruth.read(path) == generated.ground_truth
+
+
+def test_each_plantable_defect_kind_can_be_planted_on_its_own() -> None:
+    history = generate_history(generate_catalog(3), _PLAN_DAY, 1)
+    for kind in PLANTABLE_DEFECTS:
+        plan = DefectPlan(sales_channel="ST03", day=_PLAN_DAY, upload_kind=UploadKind.SALES, defect_kind=kind)
+        [planted] = generate_uploads(history, [plan]).ground_truth.defects
+        assert planted.defect_kind is kind
+
+
+def test_defect_kinds_that_cannot_be_planted_yet_are_refused() -> None:
+    history = generate_history(generate_catalog(3), _PLAN_DAY, 1)
+    plan = DefectPlan(
+        sales_channel="ST01", day=_PLAN_DAY, upload_kind=UploadKind.SALES, defect_kind=DefectKind.UNKNOWN_SKU
+    )
+
+    with pytest.raises(ValueError, match="cannot be planted"):
+        generate_uploads(history, [plan])

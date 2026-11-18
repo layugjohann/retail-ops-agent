@@ -12,19 +12,35 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
+from retail_ops_agent.defects import DefectKind
+from retail_ops_agent.generator import DefectPlan
 from retail_ops_agent.models import models_from_environment
 from retail_ops_agent.ops_day import OpsDay
 from retail_ops_agent.sandbox import build_sandbox
+from retail_ops_agent.uploads import UploadKind
 
 SEED = 7
 FIRST_DAY = date(2026, 11, 1)
 DAYS = 14
+# Safe-fixable Defects planted in the sandbox's Uploads, so the Audit Log has Safe Fixes to show.
+PLANTED_DEFECTS = [
+    DefectPlan(sales_channel=channel, day=date(2026, 11, day), upload_kind=kind, defect_kind=defect)
+    for channel, day, kind, defect in [
+        ("ST02", 3, UploadKind.SALES, DefectKind.RENAMED_COLUMN),
+        ("ONLINE", 5, UploadKind.INVENTORY, DefectKind.WRONG_DELIMITER),
+        ("ST04", 8, UploadKind.INVENTORY, DefectKind.STRAY_WHITESPACE),
+        ("ONLINE", 11, UploadKind.SALES, DefectKind.BYTE_ORDER_MARK),
+    ]
+]
+UNDO_TAKEN_BY = "BI analyst (dashboard)"
 
 
 @st.cache_resource
 def _sandbox() -> tuple[OpsDay, str]:
     models, label = models_from_environment(os.environ)
-    return build_sandbox(seed=SEED, models=models, first_day=FIRST_DAY, days=DAYS), label
+    return build_sandbox(
+        seed=SEED, models=models, first_day=FIRST_DAY, days=DAYS, defects=PLANTED_DEFECTS
+    ), label
 
 
 ops_day, model_label = _sandbox()
@@ -86,3 +102,39 @@ if statuses.empty:
     st.info("No Uploads processed yet.")
 else:
     st.dataframe(statuses, hide_index=True)
+
+st.header("Audit Log")
+entries = ops_day.audit_log()
+if not entries:
+    st.info("No Actions recorded yet.")
+else:
+    st.dataframe(
+        pd.DataFrame(
+            [
+                {
+                    "entry": e.entry_id,
+                    "recorded at": e.recorded_at,
+                    "Action": e.action.value,
+                    "Tier": int(e.tier),
+                    "taken by": e.taken_by,
+                    "triggered by": e.triggered_by,
+                    "summary": e.summary,
+                    "how to undo": e.undo.description,
+                    "undone by entry": e.undone_by,
+                }
+                for e in entries
+            ]
+        ),
+        hide_index=True,
+    )
+    undoable = {e.entry_id: e for e in entries if e.undone_by is None}
+    if undoable:
+        chosen = st.selectbox(
+            "Entry to undo",
+            list(undoable),
+            format_func=lambda entry_id: f"{entry_id}: {undoable[entry_id].summary}",
+        )
+        if st.button("Undo"):
+            undo = ops_day.undo(chosen, taken_by=UNDO_TAKEN_BY)
+            st.success(f"Recorded entry {undo.entry_id}: {undo.summary}")
+            st.rerun()

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import tempfile
+from collections.abc import Sequence
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
@@ -10,22 +11,35 @@ from retail_ops_agent.catalog import SalesChannelKind
 from retail_ops_agent.clock import SimulatedClock
 from retail_ops_agent.data_source import CsvDataSource
 from retail_ops_agent.erp import InMemoryErp
-from retail_ops_agent.generator import generate_catalog, generate_history, upload_csv
+from retail_ops_agent.generator import DefectPlan, generate_catalog, generate_history, generate_uploads
 from retail_ops_agent.notifier import LogNotifier
 from retail_ops_agent.ops_day import Models, OpsDay
 from retail_ops_agent.uploads import UploadKind
 
 UPLOAD_TIME = time(21, 0)
+GROUND_TRUTH_FILE = "ground_truth.json"
 
 
 def build_sandbox(
-    *, seed: int, models: Models, first_day: date, days: int, upload_directory: Path | None = None
+    *,
+    seed: int,
+    models: Models,
+    first_day: date,
+    days: int,
+    defects: Sequence[DefectPlan] = (),
+    upload_directory: Path | None = None,
 ) -> OpsDay:
-    """Submit every Sales Channel's clean sales and inventory Uploads for each day and run those Ops Days."""
+    """Submit every Sales Channel's sales and inventory Uploads for each day and process those Ops Days.
+
+    Uploads are clean except for the planned Defects; the ground-truth record of what was planted
+    is written beside the Uploads.
+    """
     catalog = generate_catalog(seed)
-    history = generate_history(catalog, first_day, days)
+    generated = generate_uploads(generate_history(catalog, first_day, days), defects)
     clock = SimulatedClock(datetime.combine(first_day, UPLOAD_TIME))
     directory = upload_directory or Path(tempfile.mkdtemp(prefix="cobalt-home-uploads-"))
+    directory.mkdir(parents=True, exist_ok=True)
+    generated.ground_truth.write(directory / GROUND_TRUTH_FILE)
     ops_day = OpsDay(
         models=models,
         erp=InMemoryErp(catalog),
@@ -33,14 +47,14 @@ def build_sandbox(
         data_source=CsvDataSource(directory),
         clock=clock,
     )
-    for day in history.days:
+    for day in generated.history.days:
         for channel in catalog.sales_channels:
             for kind in UploadKind:
                 ops_day.submit_upload(
                     sales_channel=channel.code,
                     day=day,
                     kind=kind,
-                    content=upload_csv(history, channel.code, day, kind),
+                    content=generated.content(channel.code, day, kind),
                     uploader=_uploader(channel.code, channel.kind),
                 )
         ops_day.run_ops_day(day)

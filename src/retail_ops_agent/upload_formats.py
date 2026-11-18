@@ -15,6 +15,7 @@ from enum import StrEnum
 
 from retail_ops_agent.catalog import SalesChannelKind
 from retail_ops_agent.defects import Defect, DefectKind
+from retail_ops_agent.safe_fixes import apply_safe_fixes
 from retail_ops_agent.uploads import Upload, UploadKind
 
 # One Sales Channel selling more than this many units of one SKU in a day is not believable.
@@ -82,7 +83,10 @@ class ParsedUpload:
     format: UploadFormat
     columns: list[str]
     row_count: int = 0
+    # Defects with no Safe Fix: any one of them keeps the Upload out of the BI data.
     defects: list[Defect] = field(default_factory=list[Defect])
+    # Defects corrected by a Safe Fix before the rows were read.
+    safe_fixed: list[Defect] = field(default_factory=list[Defect])
     sales: list[SalesLine] = field(default_factory=list[SalesLine])
     stock: list[StockLine] = field(default_factory=list[StockLine])
 
@@ -90,13 +94,16 @@ class ParsedUpload:
 def parse_upload(
     upload: Upload, sales_channel_kind: SalesChannelKind, known_skus: frozenset[str]
 ) -> ParsedUpload:
-    """Check an Upload's structure and content and normalise its rows.
+    """Apply Safe Fixes, then check the Upload's structure and content and normalise its rows.
 
-    Sales and stock lines are only meaningful when no Defects were found.
+    Sales and stock lines are only meaningful when no Defects without a Safe Fix were found.
     """
     upload_format = format_for(sales_channel_kind, upload.kind)
-    reader = csv.DictReader(io.StringIO(upload.content))
-    parsed = ParsedUpload(format=upload_format, columns=list(reader.fieldnames or []))
+    fixes = apply_safe_fixes(upload.content, COLUMNS[upload_format])
+    reader = csv.DictReader(io.StringIO(fixes.content))
+    parsed = ParsedUpload(
+        format=upload_format, columns=list(reader.fieldnames or []), safe_fixed=list(fixes.fixed)
+    )
     missing = [c for c in COLUMNS[upload_format] if c not in parsed.columns]
     for column in missing:
         parsed.defects.append(
