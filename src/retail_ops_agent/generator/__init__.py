@@ -24,6 +24,12 @@ from retail_ops_agent.generator.history import (
     SalesRow,
     generate_history,
 )
+from retail_ops_agent.generator.resubmissions import (
+    PlantedResubmission,
+    ResubmissionKind,
+    ResubmissionPlan,
+    resubmission_csv,
+)
 
 __all__ = [
     "PLANTABLE_DEFECTS",
@@ -34,13 +40,17 @@ __all__ = [
     "InventoryRow",
     "OrderLine",
     "PlantedDefect",
+    "PlantedResubmission",
     "Restock",
+    "ResubmissionKind",
+    "ResubmissionPlan",
     "SalesRow",
     "generate_catalog",
     "generate_history",
     "generate_uploads",
     "online_shop_order_lines_csv",
     "online_shop_stock_snapshot_csv",
+    "resubmission_csv",
     "store_inventory_csv",
     "store_sales_csv",
     "upload_csv",

@@ -20,6 +20,7 @@ from retail_ops_agent.catalog import SalesChannelKind
 from retail_ops_agent.defects import DefectKind, has_safe_fix
 from retail_ops_agent.generator.formats import upload_csv
 from retail_ops_agent.generator.history import History
+from retail_ops_agent.generator.resubmissions import PlantedResubmission, ResubmissionPlan, resubmission_csv
 from retail_ops_agent.upload_formats import (
     MAX_PLAUSIBLE_DAILY_UNITS,
     MAX_PLAUSIBLE_ON_HAND,
@@ -134,6 +135,7 @@ class GroundTruth(BaseModel):
     seed: int
     days: tuple[date, ...]
     defects: tuple[PlantedDefect, ...]
+    resubmissions: tuple[PlantedResubmission, ...] = ()
 
     def write(self, path: Path) -> None:
         path.write_text(self.model_dump_json(indent=2), encoding="utf-8")
@@ -152,14 +154,40 @@ class GeneratedUploads:
     _planted: dict[tuple[str, date, UploadKind], str] = field(
         default_factory=dict[tuple[str, date, UploadKind], str]
     )
+    _resubmitted: dict[tuple[str, date, UploadKind], str] = field(
+        default_factory=dict[tuple[str, date, UploadKind], str]
+    )
 
     def content(self, sales_channel: str, day: date, kind: UploadKind) -> str:
+        """The Upload as first submitted, with any planted Defects."""
         planted = self._planted.get((sales_channel, day, kind))
         return planted if planted is not None else upload_csv(self.history, sales_channel, day, kind)
 
+    def resubmission(self, sales_channel: str, day: date, kind: UploadKind) -> str:
+        """The planned resubmission that replaces the Upload."""
+        try:
+            return self._resubmitted[(sales_channel, day, kind)]
+        except KeyError:
+            raise KeyError(
+                f"no resubmission planned for {sales_channel} {day.isoformat()} {kind.value}"
+            ) from None
 
-def generate_uploads(history: History, plans: Sequence[DefectPlan] = ()) -> GeneratedUploads:
-    """Plant each planned Defect; Uploads with none planted are the clean ones from the history."""
+
+def generate_uploads(
+    history: History,
+    plans: Sequence[DefectPlan] = (),
+    resubmissions: Sequence[ResubmissionPlan] = (),
+) -> GeneratedUploads:
+    """Plant each planned Defect and resubmission; Uploads with no Defect planted are the clean
+    ones from the history."""
+    resubmitted: dict[tuple[str, date, UploadKind], str] = {}
+    planted_resubmissions: list[PlantedResubmission] = []
+    for resubmission in resubmissions:
+        key = (resubmission.sales_channel, resubmission.day, resubmission.upload_kind)
+        if key in resubmitted:
+            raise ValueError(f"more than one resubmission planned for {key}")
+        resubmitted[key], truth = resubmission_csv(history, resubmission)
+        planted_resubmissions.append(truth)
     by_upload: dict[tuple[str, date, UploadKind], list[DefectPlan]] = {}
     for plan in plans:
         if plan.defect_kind not in PLANTABLE_DEFECTS:
@@ -208,8 +236,14 @@ def generate_uploads(history: History, plans: Sequence[DefectPlan] = ()) -> Gene
 
     return GeneratedUploads(
         history=history,
-        ground_truth=GroundTruth(seed=history.catalog.seed, days=history.days, defects=tuple(planted)),
+        ground_truth=GroundTruth(
+            seed=history.catalog.seed,
+            days=history.days,
+            defects=tuple(planted),
+            resubmissions=tuple(planted_resubmissions),
+        ),
         _planted=planted_contents,
+        _resubmitted=resubmitted,
     )
 
 

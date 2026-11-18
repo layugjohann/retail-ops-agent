@@ -13,7 +13,7 @@ import pandas as pd
 import streamlit as st
 
 from retail_ops_agent.defects import DefectKind
-from retail_ops_agent.generator import DefectPlan
+from retail_ops_agent.generator import DefectPlan, ResubmissionKind, ResubmissionPlan
 from retail_ops_agent.models import models_from_environment
 from retail_ops_agent.ops_day import OpsDay
 from retail_ops_agent.sandbox import build_sandbox
@@ -36,6 +36,17 @@ PLANTED_DEFECTS = [
         ("ONLINE", 12, UploadKind.SALES, DefectKind.DUPLICATE_DAY),
     ]
 ]
+# Resubmissions in the sandbox: a corrected one gets a Quarantined Upload accepted, and a changed one
+# revises figures, so the Upload status view has Superseded Uploads to show.
+RESUBMISSIONS = [
+    ResubmissionPlan(
+        sales_channel=channel, day=date(2026, 11, day), upload_kind=kind, resubmission_kind=change
+    )
+    for channel, day, kind, change in [
+        ("ST03", 6, UploadKind.SALES, ResubmissionKind.CORRECTED),
+        ("ST01", 10, UploadKind.INVENTORY, ResubmissionKind.CHANGED),
+    ]
+]
 UNDO_TAKEN_BY = "BI analyst (dashboard)"
 
 
@@ -43,7 +54,12 @@ UNDO_TAKEN_BY = "BI analyst (dashboard)"
 def _sandbox() -> tuple[OpsDay, str]:
     models, label = models_from_environment(os.environ)
     return build_sandbox(
-        seed=SEED, models=models, first_day=FIRST_DAY, days=DAYS, defects=PLANTED_DEFECTS
+        seed=SEED,
+        models=models,
+        first_day=FIRST_DAY,
+        days=DAYS,
+        defects=PLANTED_DEFECTS,
+        resubmissions=RESUBMISSIONS,
     ), label
 
 
@@ -98,6 +114,8 @@ statuses = pd.DataFrame(
             "status": u.status.value,
             "Defects": len(u.defects),
             "Upload": u.upload_id,
+            "superseded by": u.superseded_by or "",
+            "history": " → ".join(c.status.value for c in u.history),
         }
         for u in ops_day.upload_statuses()
     ]
@@ -106,9 +124,12 @@ if statuses.empty:
     st.info("No Uploads processed yet.")
 else:
     quarantined = int((statuses["status"] == "quarantined").sum())
+    superseded = int((statuses["status"] == "superseded").sum())
     st.caption(
         f"{quarantined} Upload{'s' if quarantined != 1 else ''} in Quarantine: held out of the BI data "
-        "until the Uploader resends a corrected file."
+        "until the Uploader resends a corrected file. "
+        f"{superseded} Upload{'s' if superseded != 1 else ''} Superseded: replaced by a later Upload "
+        "for the same Sales Channel, day and kind, and kept out of the BI data."
     )
     st.dataframe(statuses, hide_index=True)
 

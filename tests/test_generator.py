@@ -15,6 +15,8 @@ from retail_ops_agent.generator import (
     DefectPlan,
     GroundTruth,
     History,
+    ResubmissionKind,
+    ResubmissionPlan,
     generate_catalog,
     generate_history,
     generate_uploads,
@@ -295,3 +297,74 @@ def test_a_duplicated_day_repeats_every_row_after_the_last() -> None:
     assert generated.content("ST01", _PLAN_DAY, UploadKind.SALES) == f"{header}\n{body}{body}"
     [planted] = generated.ground_truth.defects
     assert planted.row == len(body.splitlines()) + 2
+
+
+def _resubmission(channel: str, kind: UploadKind, change: ResubmissionKind) -> ResubmissionPlan:
+    return ResubmissionPlan(sales_channel=channel, day=_PLAN_DAY, upload_kind=kind, resubmission_kind=change)
+
+
+def test_a_corrected_resubmission_is_the_clean_upload_without_its_planted_defects() -> None:
+    history = generate_history(generate_catalog(3), _PLAN_DAY, 1)
+    plan = DefectPlan(
+        sales_channel="ST01",
+        day=_PLAN_DAY,
+        upload_kind=UploadKind.SALES,
+        defect_kind=DefectKind.MISSING_COLUMN,
+    )
+
+    generated = generate_uploads(
+        history, [plan], [_resubmission("ST01", UploadKind.SALES, ResubmissionKind.CORRECTED)]
+    )
+
+    clean = upload_csv(history, "ST01", _PLAN_DAY, UploadKind.SALES)
+    assert generated.content("ST01", _PLAN_DAY, UploadKind.SALES) != clean
+    assert generated.resubmission("ST01", _PLAN_DAY, UploadKind.SALES) == clean
+    [truth] = generated.ground_truth.resubmissions
+    assert truth.changed_rows == () and truth.unit_change == 0
+    assert truth.expected_status is UploadStatus.ACCEPTED
+    assert truth.replaced_status is UploadStatus.SUPERSEDED
+
+
+@pytest.mark.parametrize("channel", ["ST02", "ONLINE"])
+@pytest.mark.parametrize("kind", list(UploadKind))
+def test_a_changed_resubmission_revises_the_rows_its_ground_truth_records(
+    channel: str, kind: UploadKind, tmp_path: Path
+) -> None:
+    history = generate_history(generate_catalog(3), _PLAN_DAY, 1)
+    plans = [_resubmission(channel, kind, ResubmissionKind.CHANGED)]
+
+    generated = generate_uploads(history, (), plans)
+
+    assert generated.resubmission(channel, _PLAN_DAY, kind) == generate_uploads(
+        history, (), plans
+    ).resubmission(channel, _PLAN_DAY, kind)
+    [truth] = generated.ground_truth.resubmissions
+    columns, before = _rows(generated.content(channel, _PLAN_DAY, kind))
+    after_columns, after = _rows(generated.resubmission(channel, _PLAN_DAY, kind))
+    assert after_columns == columns and len(after) == len(before)
+    differing = tuple(i + 2 for i, (a, b) in enumerate(zip(before, after, strict=True)) if a != b)
+    assert differing == truth.changed_rows and len(differing) > 0
+    quantity = {
+        ("ST02", UploadKind.SALES): "quantity_sold",
+        ("ST02", UploadKind.INVENTORY): "on_hand",
+        ("ONLINE", UploadKind.SALES): "quantity",
+        ("ONLINE", UploadKind.INVENTORY): "Available Quantity",
+    }[(channel, kind)]
+    assert sum(int(r[quantity]) for r in after) - sum(int(r[quantity]) for r in before) == truth.unit_change
+    if channel == "ONLINE" and kind is UploadKind.SALES:
+        assert all(after[row - 2]["status"] == OrderLineStatus.PAID.value for row in truth.changed_rows)
+
+    path = tmp_path / "ground_truth.json"
+    generated.ground_truth.write(path)
+    assert GroundTruth.read(path) == generated.ground_truth
+
+
+def test_resubmissions_are_only_available_where_planned() -> None:
+    history = generate_history(generate_catalog(3), _PLAN_DAY, 1)
+    plan = _resubmission("ST01", UploadKind.SALES, ResubmissionKind.CHANGED)
+    generated = generate_uploads(history, (), [plan])
+
+    with pytest.raises(KeyError, match="no resubmission planned"):
+        generated.resubmission("ST02", _PLAN_DAY, UploadKind.SALES)
+    with pytest.raises(ValueError, match="more than one resubmission"):
+        generate_uploads(history, (), [plan, plan])

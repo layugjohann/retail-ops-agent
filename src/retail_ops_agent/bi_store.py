@@ -10,7 +10,7 @@ import duckdb
 from retail_ops_agent.defects import Defect
 from retail_ops_agent.upload_formats import SalesLine, StockLine
 from retail_ops_agent.uploads import Upload, UploadKind, UploadStatus
-from retail_ops_agent.views import UploaderMessage, UploadOutcome
+from retail_ops_agent.views import UploaderMessage, UploadOutcome, UploadStatusChange
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS uploads (
@@ -22,7 +22,13 @@ CREATE TABLE IF NOT EXISTS uploads (
     submitted_at  TIMESTAMP NOT NULL,
     status        VARCHAR NOT NULL,
     processed_at  TIMESTAMP NOT NULL,
-    defects       VARCHAR NOT NULL
+    defects       VARCHAR NOT NULL,
+    superseded_by VARCHAR
+);
+CREATE TABLE IF NOT EXISTS upload_status_history (
+    upload_id     VARCHAR NOT NULL,
+    changed_at    TIMESTAMP NOT NULL,
+    status        VARCHAR NOT NULL
 );
 CREATE TABLE IF NOT EXISTS sales (
     day           DATE NOT NULL,
@@ -65,7 +71,7 @@ class BiStore:
         self, upload: Upload, status: UploadStatus, processed_at: datetime, defects: list[Defect]
     ) -> None:
         self._db.execute(
-            "INSERT INTO uploads VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO uploads VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)",
             [
                 upload.upload_id,
                 upload.sales_channel,
@@ -78,9 +84,54 @@ class BiStore:
                 json.dumps([d.model_dump(mode="json") for d in defects]),
             ],
         )
+        self._record_status(upload.upload_id, status, processed_at)
 
-    def set_status(self, upload_id: str, status: UploadStatus) -> None:
+    def set_status(self, upload_id: str, status: UploadStatus, changed_at: datetime) -> None:
+        """Change an Upload's status, keeping the change in its history; no-op if it is unchanged."""
+        if self.status(upload_id) is status:
+            return
         self._db.execute("UPDATE uploads SET status = ? WHERE upload_id = ?", [status.value, upload_id])
+        self._record_status(upload_id, status, changed_at)
+
+    def supersede(self, upload_id: str, superseded_by: str, changed_at: datetime) -> None:
+        """Mark an Upload Superseded by a later one and take its rows out of the BI data."""
+        self.unload(upload_id)
+        self._db.execute(
+            "UPDATE uploads SET superseded_by = ? WHERE upload_id = ?", [superseded_by, upload_id]
+        )
+        self.set_status(upload_id, UploadStatus.SUPERSEDED, changed_at)
+
+    def status(self, upload_id: str) -> UploadStatus:
+        row = self._db.execute("SELECT status FROM uploads WHERE upload_id = ?", [upload_id]).fetchone()
+        if row is None:
+            raise KeyError(f"no processed Upload {upload_id}")
+        return UploadStatus(row[0])
+
+    def superseded_by(self, upload_id: str) -> str | None:
+        row = self._db.execute(
+            "SELECT superseded_by FROM uploads WHERE upload_id = ?", [upload_id]
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"no processed Upload {upload_id}")
+        return row[0]
+
+    def upload_days(self) -> list[date]:
+        """Every day with a processed Upload, oldest first."""
+        return [r[0] for r in self._db.execute("SELECT DISTINCT day FROM uploads ORDER BY day").fetchall()]
+
+    def current_upload_ids(self, sales_channel: str, day: date, kind: UploadKind) -> list[str]:
+        """Processed Uploads for the Sales Channel, day and kind that are not Superseded."""
+        rows = self._db.execute(
+            "SELECT upload_id FROM uploads WHERE sales_channel = ? AND day = ? AND kind = ? "
+            "AND status <> ? ORDER BY submitted_at, upload_id",
+            [sales_channel, day, kind.value, UploadStatus.SUPERSEDED.value],
+        ).fetchall()
+        return [r[0] for r in rows]
+
+    def _record_status(self, upload_id: str, status: UploadStatus, changed_at: datetime) -> None:
+        self._db.execute(
+            "INSERT INTO upload_status_history VALUES (?, ?, ?)", [upload_id, changed_at, status.value]
+        )
 
     def upload_day(self, upload_id: str) -> date:
         row = self._db.execute("SELECT day FROM uploads WHERE upload_id = ?", [upload_id]).fetchone()
@@ -137,9 +188,16 @@ class BiStore:
 
     def uploads(self) -> list[UploadOutcome]:
         rows = self._db.execute(
-            "SELECT upload_id, sales_channel, day, kind, uploader, status, processed_at, defects "
-            "FROM uploads ORDER BY day, sales_channel, kind, submitted_at, upload_id"
+            "SELECT upload_id, sales_channel, day, kind, uploader, status, processed_at, defects, "
+            "superseded_by FROM uploads ORDER BY day, sales_channel, kind, submitted_at, upload_id"
         ).fetchall()
+        history: dict[str, list[UploadStatusChange]] = {}
+        for upload_id, changed_at, status in self._db.execute(
+            "SELECT upload_id, changed_at, status FROM upload_status_history ORDER BY rowid"
+        ).fetchall():
+            history.setdefault(upload_id, []).append(
+                UploadStatusChange(changed_at=changed_at, status=UploadStatus(status))
+            )
         return [
             UploadOutcome(
                 upload_id=r[0],
@@ -150,6 +208,8 @@ class BiStore:
                 status=UploadStatus(r[5]),
                 processed_at=r[6],
                 defects=[Defect.model_validate(d) for d in json.loads(r[7])],
+                superseded_by=r[8],
+                history=history.get(r[0], []),
             )
             for r in rows
         ]

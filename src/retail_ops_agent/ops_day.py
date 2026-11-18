@@ -35,6 +35,10 @@ from retail_ops_agent.views import (
 INTAKE_AGENT = "Intake agent"
 
 
+def _key(upload: Upload) -> tuple[str, date, UploadKind]:
+    return (upload.sales_channel, upload.day, upload.kind)
+
+
 @dataclass(frozen=True)
 class Models:
     """The model each agent uses: a Pydantic AI Model, or a model name such as 'groq:...'."""
@@ -89,19 +93,38 @@ class OpsDay:
     def run_ops_day(self, day: date) -> OpsDayOutcome:
         """Process every not-yet-processed Upload for the day: Intake, then Load.
 
+        Resubmissions for earlier days that already had an Ops Day are processed too.
+
         An Upload with any Defect that has no Safe Fix is Quarantined: none of its rows are loaded,
         the Quarantine is a Tier 1 Action in the Audit Log, and Intake's message telling the
         Uploader what is wrong, where, and what to do goes out through the Notifier.
+
+        The latest Upload for a Sales Channel, day and kind replaces every earlier one, which
+        becomes Superseded and leaves the BI data, whatever its own status was. Earlier Uploads
+        superseded before they were processed never go through Intake.
         """
         processed = self._bi.processed_upload_ids()
+        days = sorted({d for d in self._bi.upload_days() if d < day} | {day})
+        pending = [u for d in days for u in self._data_source.uploads_for(d) if u.upload_id not in processed]
+        latest: dict[tuple[str, date, UploadKind], Upload] = {}
+        for upload in sorted(pending, key=lambda u: (u.submitted_at, u.upload_id)):
+            latest[_key(upload)] = upload
         known_skus = self._known_skus()
         channel_kinds = self._channel_kinds()
-        outcomes: list[UploadOutcome] = []
+        touched: list[str] = []
         entries: list[AuditEntry] = []
         messages: list[UploaderMessage] = []
-        for upload in self._data_source.uploads_for(day):
-            if upload.upload_id in processed:
+        for upload in pending:
+            touched.append(upload.upload_id)
+            later = latest[_key(upload)]
+            if later is not upload:
+                now = self._clock.now()
+                self._bi.record_upload(upload, UploadStatus.SUPERSEDED, now, [])
+                self._bi.supersede(upload.upload_id, later.upload_id, now)
                 continue
+            for earlier in self._bi.current_upload_ids(upload.sales_channel, upload.day, upload.kind):
+                self._bi.supersede(earlier, upload.upload_id, self._clock.now())
+                touched.append(earlier)
             result = run_intake(upload, channel_kinds[upload.sales_channel], known_skus, self._models.intake)
             if result.defects:
                 status = UploadStatus.QUARANTINED
@@ -109,9 +132,8 @@ class OpsDay:
                 status = UploadStatus.SAFE_FIXED
             else:
                 status = UploadStatus.ACCEPTED
-            now = self._clock.now()
             defects = [*result.safe_fixed, *result.defects]
-            self._bi.record_upload(upload, status, now, defects)
+            self._bi.record_upload(upload, status, self._clock.now(), defects)
             if status is UploadStatus.QUARANTINED:
                 entries.append(self._record_quarantine(upload, result.defects))
                 if result.uploader_message:
@@ -119,18 +141,8 @@ class OpsDay:
             else:
                 self._load(upload, result.sales, result.stock)
                 entries.extend(self._record_safe_fix(upload, defect) for defect in result.safe_fixed)
-            outcomes.append(
-                UploadOutcome(
-                    upload_id=upload.upload_id,
-                    sales_channel=upload.sales_channel,
-                    day=upload.day,
-                    kind=upload.kind,
-                    uploader=upload.uploader,
-                    status=status,
-                    processed_at=now,
-                    defects=defects,
-                )
-            )
+        by_id = {u.upload_id: u for u in self._bi.uploads()}
+        outcomes = [by_id[upload_id] for upload_id in dict.fromkeys(touched)]
         return OpsDayOutcome(day=day, uploads=outcomes, audit_entries=entries, uploader_messages=messages)
 
     def undo(self, entry_id: int, *, taken_by: str) -> AuditEntry:
@@ -147,6 +159,12 @@ class OpsDay:
             raise ValueError(f"no Audit Log entry {entry_id}") from None
         if target.undone_by is not None:
             raise ValueError(f"Audit Log entry {entry_id} is already undone by entry {target.undone_by}")
+        superseded_by = self._bi.superseded_by(target.upload_id)
+        if superseded_by is not None:
+            raise ValueError(
+                f"Upload {target.upload_id} is Superseded by Upload {superseded_by}; "
+                f"Audit Log entry {entry_id} can no longer be undone"
+            )
         entry = self._audit.append(
             recorded_at=self._clock.now(),
             action=AuditAction.UNDO,
@@ -240,7 +258,7 @@ class OpsDay:
         upload = self._processed_upload(upload_id)
         self._bi.unload(upload_id)
         if (quarantines and quarantines[-1].undone_by is None) or any(e.undone_by is not None for e in fixes):
-            self._bi.set_status(upload_id, UploadStatus.QUARANTINED)
+            self._bi.set_status(upload_id, UploadStatus.QUARANTINED, self._clock.now())
             return
         # Checks and Safe Fixes are deterministic, so reading the Upload again gives the rows they
         # passed. Rows with a Defect are never among them.
@@ -252,7 +270,9 @@ class OpsDay:
             for defect in parsed.safe_fixed:
                 self._record_safe_fix(upload, defect)
         self._bi.set_status(
-            upload_id, UploadStatus.SAFE_FIXED if parsed.safe_fixed else UploadStatus.ACCEPTED
+            upload_id,
+            UploadStatus.SAFE_FIXED if parsed.safe_fixed else UploadStatus.ACCEPTED,
+            self._clock.now(),
         )
 
     def _processed_upload(self, upload_id: str) -> Upload:
@@ -281,6 +301,8 @@ class OpsDay:
         return list(reversed(self._audit.entries()))
 
     def upload_statuses(self) -> list[UploadOutcome]:
+        """Every processed Upload by Sales Channel, day and kind, oldest first: Superseded ones too,
+        each with the Upload that replaced it and the history of its status."""
         return self._bi.uploads()
 
     def uploader_messages(self) -> list[UploaderMessage]:
