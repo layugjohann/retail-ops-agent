@@ -43,6 +43,10 @@ class DemandModel:
         price_factor = 20.0 / (20.0 + sku.retail_price)
         return 1.5 * self._size[sales_channel] * self._popularity[sku.code] * price_factor
 
+    def expected_units(self, sales_channel: str, sku: Sku, day: date) -> float:
+        """Average daily units expected in the day's season, ignoring the weekday."""
+        return self.base_units(sales_channel, sku) * _season_factor(day, sku.category)
+
     def draw(self, sales_channel: str, day: date) -> dict[str, int]:
         """Units each SKU is asked for at the Sales Channel on the day."""
         rng = random.Random(f"demand:{self._catalog.seed}:{sales_channel}:{day.isoformat()}")

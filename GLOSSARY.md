@@ -98,6 +98,10 @@ _Avoid_: Run, batch, job, daily run
 A statistically unusual pattern in valid data that may mean a business problem, such as a stockout risk or a sales drop at one Store.
 _Avoid_: Alert, outlier, issue
 
+**Days of Cover**:
+How many days the units of a SKU on hand at a Sales Channel would last at its recent average daily sales; a stockout risk is flagged when it falls below the SKU's Lead Time.
+_Avoid_: Runway, stock days, weeks of supply
+
 **Investigation**:
 The look into an Anomaly that ends in an explanation of its likely cause and a recommended Action.
 _Avoid_: Analysis, diagnosis, report

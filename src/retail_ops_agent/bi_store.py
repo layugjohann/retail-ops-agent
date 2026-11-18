@@ -7,6 +7,8 @@ from datetime import date, datetime
 
 import duckdb
 
+from retail_ops_agent.analyst import Investigation
+from retail_ops_agent.anomalies import Anomaly
 from retail_ops_agent.defects import Defect
 from retail_ops_agent.upload_formats import SalesLine, StockLine
 from retail_ops_agent.uploads import Upload, UploadKind, UploadStatus
@@ -45,6 +47,17 @@ CREATE TABLE IF NOT EXISTS inventory (
     on_hand       INTEGER NOT NULL,
     upload_id     VARCHAR NOT NULL
 );
+CREATE TABLE IF NOT EXISTS anomalies (
+    anomaly_id    VARCHAR PRIMARY KEY,
+    day           DATE NOT NULL,
+    anomaly       VARCHAR NOT NULL
+);
+CREATE TABLE IF NOT EXISTS investigations (
+    investigation_id VARCHAR PRIMARY KEY,
+    anomaly_id       VARCHAR NOT NULL,
+    investigated_at  TIMESTAMP NOT NULL,
+    investigation    VARCHAR NOT NULL
+);
 CREATE TABLE IF NOT EXISTS uploader_messages (
     upload_id     VARCHAR NOT NULL,
     sent_at       TIMESTAMP NOT NULL,
@@ -53,6 +66,9 @@ CREATE TABLE IF NOT EXISTS uploader_messages (
     body          VARCHAR NOT NULL
 );
 """
+
+# Upload statuses whose rows are in the BI data.
+_LOADED = "'accepted', 'safe_fixed'"
 
 
 class BiStore:
@@ -160,6 +176,38 @@ class BiStore:
             for r in rows
         ]
 
+    def record_anomaly(self, anomaly: Anomaly) -> None:
+        self._db.execute(
+            "INSERT INTO anomalies VALUES (?, ?, ?)",
+            [anomaly.anomaly_id, anomaly.day, anomaly.model_dump_json()],
+        )
+
+    def anomaly_ids(self) -> set[str]:
+        return {r[0] for r in self._db.execute("SELECT anomaly_id FROM anomalies").fetchall()}
+
+    def anomalies(self) -> list[Anomaly]:
+        """Every Anomaly flagged, oldest first."""
+        rows = self._db.execute("SELECT anomaly FROM anomalies ORDER BY day, anomaly_id").fetchall()
+        return [Anomaly.model_validate_json(r[0]) for r in rows]
+
+    def record_investigation(self, investigation: Investigation) -> None:
+        self._db.execute(
+            "INSERT INTO investigations VALUES (?, ?, ?, ?)",
+            [
+                investigation.investigation_id,
+                investigation.anomaly.anomaly_id,
+                investigation.investigated_at,
+                investigation.model_dump_json(),
+            ],
+        )
+
+    def investigations(self) -> list[Investigation]:
+        """Every Investigation, newest first."""
+        rows = self._db.execute(
+            "SELECT investigation FROM investigations ORDER BY investigated_at DESC, rowid DESC"
+        ).fetchall()
+        return [Investigation.model_validate_json(r[0]) for r in rows]
+
     def load_sales(self, upload: Upload, lines: list[SalesLine]) -> None:
         if not lines:
             return
@@ -239,6 +287,67 @@ class BiStore:
             "WHERE u.status IN ('accepted', 'safe_fixed')"
         ).fetchone()
         return row[0] if row else None
+
+    # Read-only queries for Anomaly detection and the Analyst's tools.
+
+    def stock_on(self, day: date) -> dict[tuple[str, str], int]:
+        """Accepted units on hand by (Sales Channel, SKU) at the end of the day."""
+        rows = self._db.execute(
+            "SELECT i.sales_channel, i.sku, SUM(i.on_hand) "
+            "FROM inventory i JOIN uploads u USING (upload_id) "
+            f"WHERE u.status IN ({_LOADED}) AND i.day = ? GROUP BY i.sales_channel, i.sku",
+            [day],
+        ).fetchall()
+        return {(r[0], r[1]): int(r[2]) for r in rows}
+
+    def units_sold_between(self, first: date, last: date) -> dict[tuple[str, str], int]:
+        """Accepted units sold by (Sales Channel, SKU) over the days, both included."""
+        rows = self._db.execute(
+            "SELECT s.sales_channel, s.sku, SUM(s.quantity_sold) "
+            "FROM sales s JOIN uploads u USING (upload_id) "
+            f"WHERE u.status IN ({_LOADED}) AND s.day BETWEEN ? AND ? GROUP BY s.sales_channel, s.sku",
+            [first, last],
+        ).fetchall()
+        return {(r[0], r[1]): int(r[2]) for r in rows}
+
+    def sales_days_between(self, first: date, last: date) -> dict[str, int]:
+        """By Sales Channel: how many of the days have accepted sales."""
+        rows = self._db.execute(
+            "SELECT s.sales_channel, COUNT(DISTINCT s.day) "
+            "FROM sales s JOIN uploads u USING (upload_id) "
+            f"WHERE u.status IN ({_LOADED}) AND s.day BETWEEN ? AND ? GROUP BY s.sales_channel",
+            [first, last],
+        ).fetchall()
+        return {r[0]: int(r[1]) for r in rows}
+
+    def inventory_days_before(self, day: date) -> dict[str, date]:
+        """By Sales Channel: the latest day before the given one with accepted inventory."""
+        rows = self._db.execute(
+            "SELECT i.sales_channel, MAX(i.day) FROM inventory i JOIN uploads u USING (upload_id) "
+            f"WHERE u.status IN ({_LOADED}) AND i.day < ? GROUP BY i.sales_channel",
+            [day],
+        ).fetchall()
+        return {r[0]: r[1] for r in rows}
+
+    def daily_sales(self, sales_channel: str, sku: str, first: date, last: date) -> list[tuple[date, int]]:
+        """Accepted units of the SKU sold at the Sales Channel each day with accepted sales."""
+        rows = self._db.execute(
+            "SELECT s.day, SUM(s.quantity_sold) FROM sales s JOIN uploads u USING (upload_id) "
+            f"WHERE u.status IN ({_LOADED}) AND s.sales_channel = ? AND s.sku = ? "
+            "AND s.day BETWEEN ? AND ? GROUP BY s.day ORDER BY s.day",
+            [sales_channel, sku, first, last],
+        ).fetchall()
+        return [(r[0], int(r[1])) for r in rows]
+
+    def daily_stock(self, sales_channel: str, sku: str, first: date, last: date) -> list[tuple[date, int]]:
+        """Accepted units of the SKU on hand at the Sales Channel at the end of each day."""
+        rows = self._db.execute(
+            "SELECT i.day, SUM(i.on_hand) FROM inventory i JOIN uploads u USING (upload_id) "
+            f"WHERE u.status IN ({_LOADED}) AND i.sales_channel = ? AND i.sku = ? "
+            "AND i.day BETWEEN ? AND ? GROUP BY i.day ORDER BY i.day",
+            [sales_channel, sku, first, last],
+        ).fetchall()
+        return [(r[0], int(r[1])) for r in rows]
 
     def inventory_by_sku(self, day: date) -> list[tuple[str, str, int]]:
         """Per Sales Channel and SKU: units on hand at the end of the day."""

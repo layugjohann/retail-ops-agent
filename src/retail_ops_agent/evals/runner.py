@@ -51,7 +51,8 @@ def run_scenario(
     """Submit the Scenario's Uploads and run its Ops Days through the Ops Day boundary."""
     return build_sandbox(
         seed=scenario.seed,
-        models=Models(intake=intake_model),
+        # Intake Golden Scenarios run too few days for Anomaly detection, so no other agent is reached.
+        models=Models(intake=intake_model, analyst=intake_model, ops=intake_model),
         first_day=scenario.first_day,
         days=scenario.days,
         defects=scenario.planted.defects,

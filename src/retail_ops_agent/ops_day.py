@@ -11,6 +11,9 @@ from datetime import date
 
 from pydantic_ai.models import Model
 
+from retail_ops_agent.action_policy import ALERT_RECIPIENT, PolicyDecision, decide
+from retail_ops_agent.analyst import Investigation, investigate
+from retail_ops_agent.anomalies import Anomaly, detect_stockout_risks
 from retail_ops_agent.audit_log import AuditAction, AuditEntry, AuditLog, UndoOperation, UndoRecipe
 from retail_ops_agent.bi_store import BiStore
 from retail_ops_agent.catalog import SalesChannelKind
@@ -20,6 +23,7 @@ from retail_ops_agent.defects import Defect, defect_location
 from retail_ops_agent.erp import ErpClient
 from retail_ops_agent.intake import run_intake
 from retail_ops_agent.notifier import Notification, Notifier
+from retail_ops_agent.ops_agent import OPS_AGENT, ActionProposal, propose_action
 from retail_ops_agent.upload_formats import SalesLine, StockLine, parse_upload
 from retail_ops_agent.uploader_messages import quarantine_subject
 from retail_ops_agent.uploads import Upload, UploadKind, UploadStatus
@@ -44,6 +48,8 @@ class Models:
     """The model each agent uses: a Pydantic AI Model, or a model name such as 'groq:...'."""
 
     intake: Model | str
+    analyst: Model | str
+    ops: Model | str
 
 
 class OpsDay:
@@ -91,7 +97,9 @@ class OpsDay:
         return upload.upload_id
 
     def run_ops_day(self, day: date) -> OpsDayOutcome:
-        """Process every not-yet-processed Upload for the day: Intake, then Load.
+        """Process the day: Intake, then Load, then Detect, then the Analyst, then Ops (ADR 0003).
+
+        The handoff between stages is this fixed pipeline; no model decides what runs next.
 
         Resubmissions for earlier days that already had an Ops Day are processed too.
 
@@ -102,6 +110,11 @@ class OpsDay:
         The latest Upload for a Sales Channel, day and kind replaces every earlier one, which
         becomes Superseded and leaves the BI data, whatever its own status was. Earlier Uploads
         superseded before they were processed never go through Intake.
+
+        Deterministic statistics then flag the day's new Anomalies in the accepted data. The Analyst
+        agent investigates each with read-only tools, the Ops agent proposes an Action from the
+        Investigation, and the Action policy, not the model, sets its Tier. A Tier 1 alert is posted
+        through the Notifier and recorded in the Audit Log.
         """
         processed = self._bi.processed_upload_ids()
         days = sorted({d for d in self._bi.upload_days() if d < day} | {day})
@@ -143,7 +156,65 @@ class OpsDay:
                 entries.extend(self._record_safe_fix(upload, defect) for defect in result.safe_fixed)
         by_id = {u.upload_id: u for u in self._bi.uploads()}
         outcomes = [by_id[upload_id] for upload_id in dict.fromkeys(touched)]
-        return OpsDayOutcome(day=day, uploads=outcomes, audit_entries=entries, uploader_messages=messages)
+        anomalies = self._detect(day)
+        investigations: list[Investigation] = []
+        for anomaly in anomalies:
+            investigation = investigate(
+                anomaly,
+                bi=self._bi,
+                erp=self._erp,
+                model=self._models.analyst,
+                investigated_at=self._clock.now(),
+            )
+            proposal = propose_action(investigation, self._models.ops)
+            decision = decide(proposal)
+            # Recorded only once both agents have answered, so an Anomaly whose Investigation
+            # failed (a model outage or rate limit) is still investigated when the Ops Day is rerun.
+            self._bi.record_anomaly(anomaly)
+            self._bi.record_investigation(investigation)
+            investigations.append(investigation)
+            if decision.runs_on_its_own:
+                entries.append(self._post_alert(investigation, proposal, decision))
+        return OpsDayOutcome(
+            day=day,
+            uploads=outcomes,
+            audit_entries=entries,
+            uploader_messages=messages,
+            anomalies=anomalies,
+            investigations=investigations,
+        )
+
+    def _detect(self, day: date) -> list[Anomaly]:
+        """The day's Anomalies not already flagged and investigated."""
+        skus = {s.code: s for s in self._erp.list_skus()}
+        known = self._bi.anomaly_ids()
+        return [a for a in detect_stockout_risks(self._bi, day, skus) if a.anomaly_id not in known]
+
+    def _post_alert(
+        self, investigation: Investigation, proposal: ActionProposal, decision: PolicyDecision
+    ) -> AuditEntry:
+        self._notifier.send(
+            Notification(
+                sent_at=self._clock.now(),
+                recipient=ALERT_RECIPIENT,
+                subject=proposal.subject,
+                body=proposal.body,
+            )
+        )
+        return self._audit.append(
+            recorded_at=self._clock.now(),
+            action=decision.action,
+            triggered_by=f"{investigation.anomaly.summary} ({investigation.investigation_id})",
+            taken_by=OPS_AGENT,
+            summary=f"Alerted {ALERT_RECIPIENT}: {proposal.subject}",
+            upload_id=None,
+            defect=None,
+            investigation_id=investigation.investigation_id,
+            undo=UndoRecipe(
+                operation=UndoOperation.WITHDRAW_ALERT,
+                description="Withdraw the alert: it stays in the Audit Log, marked withdrawn.",
+            ),
+        )
 
     def undo(self, entry_id: int, *, taken_by: str) -> AuditEntry:
         """Undo an Audit Log entry. The undo is a new entry; the undone entry is never changed.
@@ -151,7 +222,7 @@ class OpsDay:
         Undoing a Safe Fix takes its Upload back to how it arrived: the Upload's rows leave the BI
         data and, with its Defect no longer fixed, it is held in Quarantine. Undoing a Quarantine
         releases the Upload: the rows that passed every check are loaded and it is accepted. Undoing
-        an undo reinstates what it reversed.
+        an alert withdraws it. Undoing an undo reinstates what it reversed.
         """
         try:
             target = self._audit.entry(entry_id)
@@ -159,7 +230,7 @@ class OpsDay:
             raise ValueError(f"no Audit Log entry {entry_id}") from None
         if target.undone_by is not None:
             raise ValueError(f"Audit Log entry {entry_id} is already undone by entry {target.undone_by}")
-        superseded_by = self._bi.superseded_by(target.upload_id)
+        superseded_by = self._bi.superseded_by(target.upload_id) if target.upload_id else None
         if superseded_by is not None:
             raise ValueError(
                 f"Upload {target.upload_id} is Superseded by Upload {superseded_by}; "
@@ -173,6 +244,7 @@ class OpsDay:
             summary=f"Undid entry {target.entry_id}: {target.summary}",
             upload_id=target.upload_id,
             defect=target.defect,
+            investigation_id=target.investigation_id,
             undo=UndoRecipe(
                 operation=UndoOperation.REINSTATE_ENTRY,
                 upload_id=target.upload_id,
@@ -181,7 +253,8 @@ class OpsDay:
             ),
             undoes=target.entry_id,
         )
-        self._settle_upload(target.upload_id)
+        if target.upload_id is not None:
+            self._settle_upload(target.upload_id)
         return entry
 
     def _record_quarantine(self, upload: Upload, defects: list[Defect]) -> AuditEntry:
@@ -304,6 +377,14 @@ class OpsDay:
         """Every processed Upload by Sales Channel, day and kind, oldest first: Superseded ones too,
         each with the Upload that replaced it and the history of its status."""
         return self._bi.uploads()
+
+    def anomalies(self) -> list[Anomaly]:
+        """Every Anomaly flagged, oldest first."""
+        return self._bi.anomalies()
+
+    def investigations(self) -> list[Investigation]:
+        """Every Investigation with its cause, evidence and recommended Action, newest first."""
+        return self._bi.investigations()
 
     def uploader_messages(self) -> list[UploaderMessage]:
         """Every message Intake sent an Uploader, newest first."""

@@ -8,10 +8,13 @@ from pathlib import Path
 
 import pytest
 
+from retail_ops_agent.anomalies import AnomalyKind
 from retail_ops_agent.catalog import SalesChannelKind
 from retail_ops_agent.defects import DefectKind
 from retail_ops_agent.generator import (
     PLANTABLE_DEFECTS,
+    AnomalyCause,
+    AnomalyPlan,
     DefectPlan,
     GroundTruth,
     History,
@@ -379,3 +382,75 @@ def test_resubmissions_are_only_available_where_planned() -> None:
         generated.resubmission("ST02", _PLAN_DAY, UploadKind.SALES)
     with pytest.raises(ValueError, match="more than one resubmission"):
         generate_uploads(history, (), [plan, plan])
+
+
+_RISK_FIRST_DAY = date(2026, 5, 4)
+_RISK_DAY = date(2026, 5, 15)
+
+
+def _stockout_risk(sales_channel: str, day: date = _RISK_DAY) -> AnomalyPlan:
+    return AnomalyPlan(kind=AnomalyKind.STOCKOUT_RISK, sales_channel=sales_channel, day=day)
+
+
+@pytest.mark.parametrize("sales_channel", ["ST01", "ONLINE"])
+def test_a_planted_stockout_risk_is_a_demand_surge_the_sales_reveal(sales_channel: str) -> None:
+    catalog = generate_catalog(11)
+    history = generate_history(catalog, _RISK_FIRST_DAY, 12, [_stockout_risk(sales_channel)])
+    generated = generate_uploads(history)
+
+    [planted] = generated.ground_truth.anomalies
+    assert (planted.kind, planted.cause, planted.sales_channel, planted.day) == (
+        AnomalyKind.STOCKOUT_RISK,
+        AnomalyCause.DEMAND_SURGE,
+        sales_channel,
+        _RISK_DAY,
+    )
+    surge = [d for d in history.days if planted.cause_starts_on <= d <= planted.day]
+    before = [d for d in history.days if d < planted.cause_starts_on]
+
+    def sold(day: date) -> int:
+        return next(r.quantity_sold for r in history.sales(sales_channel, day) if r.sku == planted.sku)
+
+    assert planted.units_sold == tuple(sold(d) for d in surge)
+    usual = sum(sold(d) for d in before) / len(before)
+    assert all(units > 3 * max(usual, 1) for units in planted.units_sold)
+    on_hand = next(r.on_hand for r in history.inventory(sales_channel, _RISK_DAY) if r.sku == planted.sku)
+    assert on_hand < planted.units_sold[-1]
+    # Stock still equals the previous day's plus arrivals minus sales.
+    assert all(r.on_hand >= 0 for d in history.days for r in history.inventory(sales_channel, d))
+
+
+def test_planting_a_stockout_risk_leaves_other_skus_and_sales_channels_alone() -> None:
+    catalog = generate_catalog(11)
+    clean = generate_history(catalog, _RISK_FIRST_DAY, 12)
+    planted = generate_history(catalog, _RISK_FIRST_DAY, 12, [_stockout_risk("ST03")])
+    [anomaly] = planted.planted_anomalies
+
+    for channel in catalog.sales_channels:
+        for day in clean.days:
+            for a, b in zip(clean.sales(channel.code, day), planted.sales(channel.code, day), strict=True):
+                if (channel.code, a.sku) != ("ST03", anomaly.sku):
+                    assert a == b
+
+
+def test_planted_stockout_risks_are_deterministic_and_vary_with_the_plan() -> None:
+    catalog = generate_catalog(11)
+
+    def truth(plan: AnomalyPlan) -> GroundTruth:
+        return generate_uploads(generate_history(catalog, _RISK_FIRST_DAY, 12, [plan])).ground_truth
+
+    assert truth(_stockout_risk("ST01")) == truth(_stockout_risk("ST01"))
+    assert truth(_stockout_risk("ST01")).anomalies != truth(_stockout_risk("ST04")).anomalies
+
+
+@pytest.mark.parametrize(
+    "plan",
+    [
+        _stockout_risk("ST01", _RISK_FIRST_DAY + timedelta(days=5)),
+        _stockout_risk("ST01", _RISK_FIRST_DAY + timedelta(days=30)),
+        _stockout_risk("NOPE"),
+    ],
+)
+def test_a_stockout_risk_that_cannot_be_planted_is_refused(plan: AnomalyPlan) -> None:
+    with pytest.raises(ValueError):
+        generate_history(generate_catalog(11), _RISK_FIRST_DAY, 12, [plan])
