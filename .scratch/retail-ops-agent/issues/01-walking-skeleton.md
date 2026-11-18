@@ -4,7 +4,7 @@
 
 **Blocked by:** None
 
-**Status:** awaiting-merge
+**Status:** done
 **Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/1
 
 - [ ] Python project managed by uv, with ruff (lint and format check), pyright and pytest. `make check` runs all of them and is the sandcastle-pro Gate

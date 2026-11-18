@@ -5,7 +5,7 @@
 **Blocked by:** 01
 **Stacked on:** issue/01-walking-skeleton
 
-**Status:** awaiting-merge
+**Status:** done
 **Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/2
 
 - [ ] The generator produces all four formats from the spec (Store sales, Store inventory, Online Shop order lines with paid/cancelled/refunded, Online Shop stock snapshot with its own headers)

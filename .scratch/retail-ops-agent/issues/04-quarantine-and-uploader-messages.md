@@ -5,7 +5,7 @@
 **Blocked by:** 03
 **Stacked on:** issue/03-safe-fixes-and-audit-log
 
-**Status:** awaiting-merge
+**Status:** done
 **Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/4
 
 - [ ] Planted unfixable Defects (missing column, ambiguous swapped columns, duplicate day in one file, impossible quantity, unknown SKU, date mismatch) each lead to Quarantine

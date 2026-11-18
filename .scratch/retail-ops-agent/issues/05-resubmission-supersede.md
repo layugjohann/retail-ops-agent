@@ -5,7 +5,7 @@
 **Blocked by:** 04
 **Stacked on:** issue/04-quarantine-and-uploader-messages
 
-**Status:** awaiting-merge
+**Status:** done
 **Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/5
 
 - [ ] Resubmitting replaces the earlier Upload's data in the BI data; nothing is double-counted

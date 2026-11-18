@@ -5,7 +5,7 @@
 **Blocked by:** 01
 **Stacked on:** issue/02-all-upload-formats
 
-**Status:** awaiting-merge
+**Status:** done
 **Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/3
 
 - [ ] A fixed table, not the model, decides which Defect kinds have a Safe Fix
