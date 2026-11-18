@@ -43,11 +43,15 @@ def build_sandbox(
     sales_channels: Sequence[str] | None = None,
     upload_kinds: Sequence[UploadKind] = tuple(UploadKind),
     auto_approval_limit: float = DEFAULT_AUTO_APPROVAL_LIMIT,
+    run_days: int | None = None,
 ) -> OpsDay:
     """Submit every Sales Channel's sales and inventory Uploads for each day and process those Ops Days.
 
     sales_channels and upload_kinds narrow which Uploads are submitted (every Sales Channel and both
     kinds by default), so an eval can keep its model calls few.
+
+    run_days, if given, runs only that many of the generated days, so the sandbox can stop while a
+    Reorder queued from a planted Anomaly is still within its 48 simulated hours.
 
     Uploads are clean except for the planned Defects and Anomalies. Each planned resubmission is
     submitted after its day's Ops Day and processed by the next one, so it Supersedes the first
@@ -71,7 +75,7 @@ def build_sandbox(
     )
     channel_kinds = {c.code: c.kind for c in catalog.sales_channels}
     submitting = [c for c in catalog.sales_channels if sales_channels is None or c.code in sales_channels]
-    days_run = generated.history.days
+    days_run = generated.history.days[:run_days]
     for day in days_run:
         for channel in submitting:
             for kind in upload_kinds:
@@ -85,7 +89,7 @@ def build_sandbox(
         ops_day.run_ops_day(day)
         # Resubmissions arrive after the Ops Day has processed the first Uploads; the next Ops Day
         # picks them up.
-        clock.advance(RESUBMISSION_DELAY)
+        ops_day.advance_time(RESUBMISSION_DELAY)
         for plan in resubmissions:
             if plan.day == day:
                 ops_day.submit_upload(
@@ -95,7 +99,7 @@ def build_sandbox(
                     content=generated.resubmission(plan.sales_channel, day, plan.upload_kind),
                     uploader=_uploader(plan.sales_channel, channel_kinds[plan.sales_channel]),
                 )
-        clock.advance(datetime.combine(day + timedelta(days=1), UPLOAD_TIME) - clock.now())
+        ops_day.advance_time(datetime.combine(day + timedelta(days=1), UPLOAD_TIME) - clock.now())
     if any(plan.day == days_run[-1] for plan in resubmissions):
         ops_day.run_ops_day(days_run[-1])
     return ops_day

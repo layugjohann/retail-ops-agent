@@ -9,6 +9,10 @@ from typing import Protocol
 class Clock(Protocol):
     def now(self) -> datetime: ...
 
+    def advance(self, delta: timedelta) -> None:
+        """Move simulated time forward."""
+        ...
+
 
 class SimulatedClock:
     """A controllable clock for simulated time, tests and sandboxes."""

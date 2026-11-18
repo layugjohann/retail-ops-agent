@@ -23,6 +23,10 @@ DEFAULT_AUTO_APPROVAL_LIMIT = 150.00
 # Who approves a Reorder under the Auto-approval Limit, as the Audit Log records it.
 AUTO_APPROVER = "Action policy (Auto-approval Limit)"
 
+# Who replaces a pending Reorder with a newer Investigation's, and Expires a pending Action, as the
+# Approval Queue and Audit Log record it.
+QUEUE_RULES = "Action policy (Approval Queue rules)"
+
 # Which Audit Log Action each kind of proposal becomes.
 PROPOSED_ACTIONS: dict[ProposedActionKind, AuditAction] = {
     ProposedActionKind.ALERT: AuditAction.ALERT,

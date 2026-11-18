@@ -38,6 +38,9 @@ DAYS = 12
 SALES_CHANNEL = "ST02"
 SUBMITTED = ("ST02", "ST03")
 PLAN = AnomalyPlan(kind=AnomalyKind.STOCKOUT_RISK, sales_channel=SALES_CHANNEL, day=date(2026, 3, 12))
+# The surge drives cover below the Lead Time two days before the planted day; the run stops a day
+# after that, while the Reorder is still within its 48 simulated hours.
+LAST_DAY = date(2026, 3, 11)
 QUANTITY = 24
 PLANNER = "inventory planner"
 
@@ -96,7 +99,9 @@ class Run:
         self.outcomes: list[OpsDayOutcome] = []
 
     def run(self, generated: GeneratedUploads) -> Run:
-        for day in generated.history.days:
+        for i, day in enumerate(d for d in generated.history.days if d <= LAST_DAY):
+            if i:
+                self.ops_day.advance_time(timedelta(days=1))
             for channel in SUBMITTED:
                 for kind in UploadKind:
                     self.ops_day.submit_upload(
@@ -107,7 +112,6 @@ class Run:
                         uploader=f"manager.{channel.lower()}@cobalthome.example",
                     )
             self.outcomes.append(self.ops_day.run_ops_day(day))
-            self.clock.advance(timedelta(days=1))
         return self
 
     def reorder_entries(self) -> list[object]:

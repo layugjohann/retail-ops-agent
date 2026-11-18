@@ -7,7 +7,7 @@ evals can swap them.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timedelta
 
 from pydantic_ai.models import Model
 
@@ -15,6 +15,7 @@ from retail_ops_agent.action_policy import (
     ALERT_RECIPIENT,
     AUTO_APPROVER,
     DEFAULT_AUTO_APPROVAL_LIMIT,
+    QUEUE_RULES,
     PolicyDecision,
     Route,
     decide,
@@ -133,7 +134,12 @@ class OpsDay:
         Investigation's SKU and Sales Channel, its cost comes from the ERP's unit cost, and it waits in
         the Approval Queue unless that cost is under the Auto-approval Limit, in which case it is
         approved by rule, placed in the ERP and recorded in the Audit Log.
+
+        There is at most one pending Reorder per SKU and Sales Channel. A newer Investigation's
+        Reorder replaces the pending one, which can then no longer be approved; the replacement is
+        recorded in the Audit Log. Pending Actions past their Expiry are Expired first.
         """
+        self._expire()
         processed = self._bi.processed_upload_ids()
         days = sorted({d for d in self._bi.upload_days() if d < day} | {day})
         pending = [u for d in days for u in self._data_source.uploads_for(d) if u.upload_id not in processed]
@@ -198,7 +204,12 @@ class OpsDay:
             if decision.runs_on_its_own:
                 entries.append(self._post_alert(investigation, proposal, decision))
             elif proposal.kind is ProposedActionKind.REORDER:
+                earlier = self._queue.pending_for(investigation.anomaly.sales_channel, sku.code)
                 item = self._queue_reorder(investigation, sku, proposal)
+                if earlier is not None:
+                    replaced, entry = self._replace(earlier, item)
+                    entries.append(entry)
+                    reorders = [replaced if r.action_id == replaced.action_id else r for r in reorders]
                 if decision.route is Route.AUTO_APPROVE:
                     item = self._place_reorder(
                         item,
@@ -219,6 +230,12 @@ class OpsDay:
             reorders=reorders,
             approval_queue=self._queue.pending(),
         )
+
+    def advance_time(self, delta: timedelta) -> list[QueuedReorder]:
+        """Move simulated time forward. Returns the pending Actions that Expired: each was queued
+        more than the Expiry (48 simulated hours) before the new time and will never run."""
+        self._clock.advance(delta)
+        return self._expire()
 
     def approve(self, action_id: str, *, approved_by: str) -> QueuedReorder:
         """Approve a pending Reorder in the Approval Queue: it is placed in the ERP and recorded in the
@@ -244,13 +261,81 @@ class OpsDay:
         )
 
     def _pending(self, action_id: str) -> QueuedReorder:
+        self._expire()
         try:
             item = self._queue.get(action_id)
         except KeyError:
             raise ValueError(f"no Action {action_id} in the Approval Queue") from None
+        if item.status is ApprovalStatus.EXPIRED:
+            raise ValueError(
+                f"Action {action_id} Expired at {item.expires_at:%Y-%m-%d %H:%M} and can no longer be decided"
+            )
+        if item.status is ApprovalStatus.REPLACED:
+            raise ValueError(
+                f"Action {action_id} was replaced by Action {item.replaced_by} from a newer Investigation "
+                "and can no longer be decided"
+            )
         if item.status is not ApprovalStatus.PENDING:
             raise ValueError(f"Action {action_id} is already decided: {item.status.value}")
         return item
+
+    def _expire(self) -> list[QueuedReorder]:
+        """Expire every pending Action queued at least the Expiry before now. It Expires at the moment
+        its Expiry ran out, however much later time was read."""
+        now = self._clock.now()
+        return [
+            self._queue.save(
+                item.model_copy(
+                    update={
+                        "status": ApprovalStatus.EXPIRED,
+                        "decided_at": item.expires_at,
+                        "decided_by": QUEUE_RULES,
+                    }
+                )
+            )
+            for item in self._queue.pending()
+            if now >= item.expires_at
+        ]
+
+    def _replace(self, earlier: QueuedReorder, newer: QueuedReorder) -> tuple[QueuedReorder, AuditEntry]:
+        """Take a pending Reorder out of the Approval Queue in favour of a newer Investigation's
+        Reorder for the same SKU and Sales Channel, and record that in the Audit Log."""
+        replaced = self._queue.save(
+            earlier.model_copy(
+                update={
+                    "status": ApprovalStatus.REPLACED,
+                    "decided_at": self._clock.now(),
+                    "decided_by": QUEUE_RULES,
+                    "replaced_by": newer.action_id,
+                }
+            )
+        )
+        entry = self._audit.append(
+            recorded_at=self._clock.now(),
+            action=AuditAction.REPLACE_REORDER,
+            triggered_by=(
+                f"Investigation {newer.investigation_id} of {newer.sku} at {newer.sales_channel}, newer "
+                f"than Investigation {earlier.investigation_id}"
+            ),
+            taken_by=QUEUE_RULES,
+            summary=(
+                f"Replaced pending Reorder {earlier.action_id} ({earlier.quantity} units of {earlier.sku} "
+                f"for {earlier.sales_channel}, cost {earlier.cost:.2f}) with {newer.action_id} "
+                f"({newer.quantity} units, cost {newer.cost:.2f})"
+            ),
+            upload_id=None,
+            defect=None,
+            investigation_id=newer.investigation_id,
+            undo=UndoRecipe(
+                operation=UndoOperation.NOT_UNDOABLE,
+                description=(
+                    f"Not undone from the Audit Log: {earlier.action_id} is never put back, so there is "
+                    f"only ever one pending Reorder for {earlier.sku} at {earlier.sales_channel}. "
+                    f"Reject {newer.action_id} in the Approval Queue if it is wrong."
+                ),
+            ),
+        )
+        return replaced, entry
 
     def _queue_reorder(
         self, investigation: Investigation, sku: Sku, proposal: ActionProposal
@@ -357,8 +442,9 @@ class OpsDay:
         data and, with its Defect no longer fixed, it is held in Quarantine. Undoing a Quarantine
         releases the Upload: the rows that passed every check are loaded and it is accepted. Undoing
         an alert withdraws it. Undoing a Reorder cancels it in the ERP; that undo cannot itself be
-        undone, because placing a Reorder again needs Approval. Undoing any other undo reinstates what
-        it reversed.
+        undone, because placing a Reorder again needs Approval. A replacement in the Approval Queue is
+        not undone, so there is never more than one pending Reorder per SKU and Sales Channel. Undoing
+        any other undo reinstates what it reversed.
         """
         try:
             target = self._audit.entry(entry_id)
@@ -377,6 +463,8 @@ class OpsDay:
                 f"Audit Log entry {entry_id} cancelled a Reorder; a cancelled Reorder is not placed again "
                 "by an undo. A new Reorder needs Approval."
             )
+        if target.undo.operation is UndoOperation.NOT_UNDOABLE:
+            raise ValueError(f"Audit Log entry {entry_id} cannot be undone. {target.undo.description}")
         if target.action is AuditAction.REORDER:
             self._erp.cancel_reorder(_required(target.undo.reorder_id))
         entry = self._audit.append(
@@ -531,13 +619,24 @@ class OpsDay:
 
     def approval_queue(self) -> list[QueuedReorder]:
         """Tier 2 Actions waiting for Approval, oldest first, each with its Investigation, quantity,
-        Supplier and cost."""
+        Supplier, cost and when it Expires."""
+        self._expire()
         return self._queue.pending()
 
     def reorders(self) -> list[QueuedReorder]:
         """Every Reorder proposed, newest first, with its Approval status: pending, approved by a
-        person, approved under the Auto-approval Limit, or rejected."""
+        person, approved under the Auto-approval Limit, rejected, replaced by a newer
+        Investigation's Reorder, or Expired."""
+        self._expire()
         return self._queue.all()
+
+    def decided_reorders(self) -> list[QueuedReorder]:
+        """Every Reorder no longer waiting for Approval, newest first."""
+        return [r for r in self.reorders() if r.status is not ApprovalStatus.PENDING]
+
+    def now(self) -> datetime:
+        """The current simulated time."""
+        return self._clock.now()
 
     @property
     def auto_approval_limit(self) -> float:

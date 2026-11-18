@@ -28,6 +28,9 @@ class AuditAction(StrEnum):
     ALERT = "alert"
     # A Reorder placed in the ERP, after Approval or under the Auto-approval Limit.
     REORDER = "reorder"
+    # A newer Investigation's Reorder took the place of the pending Reorder for the same SKU and
+    # Sales Channel in the Approval Queue.
+    REPLACE_REORDER = "replace_reorder"
     UNDO = "undo"
 
 
@@ -37,6 +40,7 @@ ACTION_TIERS: dict[AuditAction, ActionTier] = {
     AuditAction.QUARANTINE: ActionTier.INTERNAL,
     AuditAction.ALERT: ActionTier.INTERNAL,
     AuditAction.REORDER: ActionTier.EXTERNAL,
+    AuditAction.REPLACE_REORDER: ActionTier.INTERNAL,
     AuditAction.UNDO: ActionTier.INTERNAL,
 }
 
@@ -53,6 +57,10 @@ class UndoOperation(StrEnum):
     # Cancel a placed Reorder in the ERP. A cancelled Reorder is never placed again by an undo: a new
     # Reorder needs Approval of its own.
     CANCEL_REORDER = "cancel_reorder"
+    # Not undone from the Audit Log. A replaced Reorder is never put back in the Approval Queue, which
+    # would make two pending Reorders for one SKU and Sales Channel; the replacing Reorder is the
+    # current recommendation, and a person who disagrees with it rejects it.
+    NOT_UNDOABLE = "not_undoable"
     # Reinstate the entry an undo reversed.
     REINSTATE_ENTRY = "reinstate_entry"
 
