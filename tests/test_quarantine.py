@@ -21,10 +21,10 @@ from retail_ops_agent.generator import (
     generate_uploads,
 )
 from retail_ops_agent.notifier import LogNotifier
-from retail_ops_agent.ops_day import Models, OpsDay
+from retail_ops_agent.ops_day import OpsDay
 from retail_ops_agent.uploads import UploadKind, UploadStatus
 
-from .conftest import scripted_intake_model
+from .conftest import scripted_intake_model, scripted_models
 
 DAY = date(2026, 3, 2)
 UPLOAD_TIME = datetime(2026, 3, 2, 21, 0)
@@ -58,7 +58,7 @@ def _generate(
 
 def _ops_day(catalog: Catalog, directory: Path, notifier: LogNotifier, intake: TestModel) -> OpsDay:
     return OpsDay(
-        models=Models(intake=intake),
+        models=scripted_models(intake),
         erp=InMemoryErp(catalog),
         notifier=notifier,
         data_source=CsvDataSource(directory / "uploads"),

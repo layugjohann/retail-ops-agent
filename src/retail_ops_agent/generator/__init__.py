@@ -1,5 +1,6 @@
 """Seeded, deterministic generator for the Client and its Uploads (ADR 0005)."""
 
+from retail_ops_agent.generator.anomalies import AnomalyCause, AnomalyPlan, PlantedAnomaly
 from retail_ops_agent.generator.catalog import generate_catalog
 from retail_ops_agent.generator.defects import (
     PLANTABLE_DEFECTS,
@@ -34,12 +35,15 @@ from retail_ops_agent.generator.resubmissions import (
 
 __all__ = [
     "PLANTABLE_DEFECTS",
+    "AnomalyCause",
+    "AnomalyPlan",
     "DefectPlan",
     "GeneratedUploads",
     "GroundTruth",
     "History",
     "InventoryRow",
     "OrderLine",
+    "PlantedAnomaly",
     "PlantedDefect",
     "PlantedResubmission",
     "Restock",

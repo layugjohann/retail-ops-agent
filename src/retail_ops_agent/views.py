@@ -6,6 +6,8 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict
 
+from retail_ops_agent.analyst import Investigation
+from retail_ops_agent.anomalies import Anomaly
 from retail_ops_agent.audit_log import AuditEntry
 from retail_ops_agent.defects import Defect
 from retail_ops_agent.uploads import UploadKind, UploadStatus
@@ -62,6 +64,8 @@ class OpsDayOutcome(BaseModel):
     uploads: list[UploadOutcome]
     audit_entries: list[AuditEntry]
     uploader_messages: list[UploaderMessage]
+    anomalies: list[Anomaly] = []
+    investigations: list[Investigation] = []
 
 
 class SalesBySalesChannel(BaseModel):

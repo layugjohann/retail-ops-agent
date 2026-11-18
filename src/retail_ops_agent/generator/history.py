@@ -4,7 +4,9 @@ Every Sales Channel starts each SKU at its order-up-to level. Each day, restocks
 arrive first, then demand is met from what is on hand (a SKU that runs out sells only what it
 has), and when on hand plus on order falls to the reorder point a restock is ordered in whole case
 packs; it arrives after the SKU's lead time. So inventory always equals the previous day's
-inventory plus arrivals minus sales.
+inventory plus arrivals minus sales. The Client plans stock for the season's expected demand and
+keeps enough on hand to cover well over a lead time, so clean data shows no stockout risk; planted
+Anomalies (see anomalies.py) are what bring one about.
 
 Online Shop sales are also broken into Order Lines. Paid lines add up to the day's sales;
 cancelled and refunded lines are extra and never touched stock.
@@ -14,18 +16,32 @@ from __future__ import annotations
 
 import math
 import random
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 
-from retail_ops_agent.catalog import Catalog, SalesChannelKind, Sku
+from retail_ops_agent.anomalies import AnomalyKind
+from retail_ops_agent.catalog import Catalog, SalesChannelKind
+from retail_ops_agent.generator.anomalies import (
+    MAX_SURGED_ON_HAND,
+    MIN_DAYS_BEFORE_SURGE,
+    MIN_SURGED_LEAD_TIME_DAYS,
+    MIN_SURGED_ON_HAND,
+    SURGE_DAYS,
+    SURGE_SHARES,
+    AnomalyPlan,
+    PlantedAnomaly,
+)
 from retail_ops_agent.generator.demand import DemandModel
 from retail_ops_agent.upload_formats import OrderLineStatus
 
 # Inventory is counted when Sales Channels close; Online Shop orders before then count for the day.
 CLOSING_TIME = time(20, 45)
 
-# How many days of demand the reorder point and the order-up-to level cover beyond the lead time.
-_SAFETY_DAYS = 3
+# The reorder point covers this many lead times of demand plus safety days, and the order-up-to
+# level review days beyond that.
+_LEAD_TIMES_COVERED = 2
+_SAFETY_DAYS = 7
 _REVIEW_DAYS = 14
 # Plan stock for a little more than average demand, to ride out busy days.
 _PLANNING_FACTOR = 1.2
@@ -87,6 +103,7 @@ class History:
         inventory: dict[tuple[str, date], list[InventoryRow]],
         restocks: tuple[Restock, ...],
         order_lines: dict[date, list[OrderLine]],
+        planted_anomalies: tuple[PlantedAnomaly, ...] = (),
     ) -> None:
         self.catalog = catalog
         self.days = days
@@ -95,6 +112,7 @@ class History:
         self._inventory = inventory
         self.restocks = restocks
         self._order_lines = order_lines
+        self.planted_anomalies = planted_anomalies
 
     def opening_stock(self, sales_channel: str) -> dict[str, int]:
         """Units of each SKU on hand before the first day."""
@@ -112,12 +130,16 @@ class History:
         return list(self._order_lines[day])
 
 
-def generate_history(catalog: Catalog, first_day: date, days: int) -> History:
-    """Simulate trading from first_day for the given number of days. Deterministic for the seed."""
+def generate_history(
+    catalog: Catalog, first_day: date, days: int, anomalies: Sequence[AnomalyPlan] = ()
+) -> History:
+    """Simulate trading from first_day for the given number of days, with each planned Anomaly
+    planted. Deterministic for the seed and the plans."""
     if days < 1:
         raise ValueError("days must be at least 1")
     demand = DemandModel(catalog)
     run = tuple(first_day + timedelta(days=offset) for offset in range(days))
+    surges = _plan_surges(catalog, run, anomalies)
 
     policies = _stock_policies(catalog, demand)
     opening = _opening_stock(catalog, policies)
@@ -133,17 +155,25 @@ def generate_history(catalog: Catalog, first_day: date, days: int) -> History:
         for channel in catalog.sales_channels:
             wanted = demand.draw(channel.code, day)
             sold: dict[str, int] = {}
+            surge = surges.get((channel.code, day))
+            if surge is not None and surge.sku is None:
+                surge.choose_sku(catalog, on_hand, on_order)
             for sku in catalog.skus:
                 key = (channel.code, sku.code)
                 arriving = [r for r in on_order[key] if r.arrives_on == day]
                 on_order[key] = [r for r in on_order[key] if r.arrives_on != day]
                 on_hand[key] += sum(r.quantity for r in arriving)
 
-                sold[sku.code] = min(wanted[sku.code], on_hand[key])
+                surging = surge is not None and surge.sku == sku.code
+                extra = surge.extra_demand(day, on_hand[key]) if surge is not None and surging else 0
+                sold[sku.code] = min(wanted[sku.code] + extra, on_hand[key])
                 on_hand[key] -= sold[sku.code]
+                if surge is not None and surging:
+                    surge.units_sold.append(sold[sku.code])
 
                 quantity = policies[key].restock_quantity(
-                    on_hand[key] + sum(r.quantity for r in on_order[key])
+                    on_hand[key] + sum(r.quantity for r in on_order[key]),
+                    demand.expected_units(channel.code, sku, day),
                 )
                 if quantity:
                     restock = Restock(
@@ -199,7 +229,79 @@ def generate_history(catalog: Catalog, first_day: date, days: int) -> History:
         inventory=inventory,
         restocks=tuple(restocks),
         order_lines=order_lines,
+        planted_anomalies=tuple(surge.planted() for surge in dict.fromkeys(surges.values())),
     )
+
+
+class _Surge:
+    """A planted demand surge at one Sales Channel, on the SKU chosen the morning it begins."""
+
+    def __init__(self, catalog: Catalog, plan: AnomalyPlan, days: tuple[date, ...]) -> None:
+        self.plan = plan
+        self.days = days
+        self.sku: str | None = None
+        self.units_sold: list[int] = []
+        self._rng = random.Random(
+            f"anomaly:{catalog.seed}:{plan.kind.value}:{plan.sales_channel}:{plan.day.isoformat()}"
+        )
+
+    def choose_sku(
+        self,
+        catalog: Catalog,
+        on_hand: dict[tuple[str, str], int],
+        on_order: dict[tuple[str, str], list[Restock]],
+    ) -> None:
+        """Pick a SKU that is comfortably stocked with nothing on order, so the surge alone drains it."""
+        channel = self.plan.sales_channel
+        candidates = [
+            sku.code
+            for sku in catalog.skus
+            if sku.lead_time_days > MIN_SURGED_LEAD_TIME_DAYS
+            and MIN_SURGED_ON_HAND <= on_hand[(channel, sku.code)] <= MAX_SURGED_ON_HAND
+            and not on_order[(channel, sku.code)]
+        ]
+        if not candidates:
+            raise ValueError(f"no SKU at {channel} can take a demand surge on {self.days[0].isoformat()}")
+        self.sku = self._rng.choice(candidates)
+
+    def extra_demand(self, day: date, on_hand: int) -> int:
+        return math.ceil(on_hand * SURGE_SHARES[self.days.index(day)])
+
+    def planted(self) -> PlantedAnomaly:
+        assert self.sku is not None
+        return PlantedAnomaly(
+            kind=self.plan.kind,
+            cause=self.plan.cause,
+            sales_channel=self.plan.sales_channel,
+            sku=self.sku,
+            cause_starts_on=self.days[0],
+            day=self.plan.day,
+            units_sold=tuple(self.units_sold),
+        )
+
+
+def _plan_surges(
+    catalog: Catalog, run: tuple[date, ...], plans: Sequence[AnomalyPlan]
+) -> dict[tuple[str, date], _Surge]:
+    channels = {c.code for c in catalog.sales_channels}
+    surges: dict[tuple[str, date], _Surge] = {}
+    for plan in plans:
+        if plan.kind is not AnomalyKind.STOCKOUT_RISK:
+            raise ValueError(f"Anomaly kind {plan.kind} cannot be planted yet")
+        if plan.sales_channel not in channels:
+            raise ValueError(f"{plan.sales_channel!r} is not a Sales Channel in the catalog")
+        days = tuple(plan.day - timedelta(days=offset) for offset in reversed(range(SURGE_DAYS)))
+        if days[-1] not in run or days[0] - timedelta(days=MIN_DAYS_BEFORE_SURGE) < run[0]:
+            raise ValueError(
+                f"a stockout risk on {plan.day.isoformat()} needs {MIN_DAYS_BEFORE_SURGE} days of trading "
+                f"before its {SURGE_DAYS}-day surge, all within the generated days"
+            )
+        surge = _Surge(catalog, plan, days)
+        for day in days:
+            if (plan.sales_channel, day) in surges:
+                raise ValueError(f"demand surges overlap at {plan.sales_channel} on {day.isoformat()}")
+            surges[(plan.sales_channel, day)] = surge
+    return surges
 
 
 def generate_opening_stock(catalog: Catalog) -> dict[str, dict[str, int]]:
@@ -212,7 +314,11 @@ def generate_opening_stock(catalog: Catalog) -> dict[str, dict[str, int]]:
 
 def _stock_policies(catalog: Catalog, demand: DemandModel) -> dict[tuple[str, str], _StockPolicy]:
     return {
-        (channel.code, sku.code): _StockPolicy.for_sku(demand.base_units(channel.code, sku), sku)
+        (channel.code, sku.code): _StockPolicy(
+            base_units=demand.base_units(channel.code, sku),
+            lead_time_days=sku.lead_time_days,
+            case_pack=sku.case_pack,
+        )
         for channel in catalog.sales_channels
         for sku in catalog.skus
     }
@@ -223,29 +329,37 @@ def _opening_stock(
 ) -> dict[str, dict[str, int]]:
     """Every Sales Channel starts each SKU at its order-up-to level."""
     return {
-        channel.code: {sku.code: policies[(channel.code, sku.code)].order_up_to for sku in catalog.skus}
+        channel.code: {
+            sku.code: policies[(channel.code, sku.code)].order_up_to(
+                policies[(channel.code, sku.code)].base_units
+            )
+            for sku in catalog.skus
+        }
         for channel in catalog.sales_channels
     }
 
 
 @dataclass(frozen=True)
 class _StockPolicy:
-    reorder_point: int
-    order_up_to: int
+    """Reorder point and order-up-to level, planned for the expected daily demand of the season."""
+
+    base_units: float
+    lead_time_days: int
     case_pack: int
 
-    @classmethod
-    def for_sku(cls, base_units: float, sku: Sku) -> _StockPolicy:
-        daily = base_units * _PLANNING_FACTOR
-        reorder_point = max(1, math.ceil(daily * (sku.lead_time_days + _SAFETY_DAYS)))
-        order_up_to = math.ceil(daily * (sku.lead_time_days + _REVIEW_DAYS)) + sku.case_pack
-        return cls(reorder_point=reorder_point, order_up_to=order_up_to, case_pack=sku.case_pack)
+    def reorder_point(self, expected_units: float) -> int:
+        days = _LEAD_TIMES_COVERED * self.lead_time_days + _SAFETY_DAYS
+        return max(1, math.ceil(expected_units * _PLANNING_FACTOR * days))
 
-    def restock_quantity(self, position: int) -> int:
+    def order_up_to(self, expected_units: float) -> int:
+        days = _LEAD_TIMES_COVERED * self.lead_time_days + _SAFETY_DAYS + _REVIEW_DAYS
+        return math.ceil(expected_units * _PLANNING_FACTOR * days) + self.case_pack
+
+    def restock_quantity(self, position: int, expected_units: float) -> int:
         """Whole case packs that bring on hand plus on order back up to the order-up-to level."""
-        if position > self.reorder_point:
+        if position > self.reorder_point(expected_units):
             return 0
-        return math.ceil((self.order_up_to - position) / self.case_pack) * self.case_pack
+        return math.ceil((self.order_up_to(expected_units) - position) / self.case_pack) * self.case_pack
 
 
 def _order_lines(catalog: Catalog, day: date, sold: dict[str, int]) -> list[OrderLine]:

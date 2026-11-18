@@ -16,8 +16,9 @@ def test_dashboard_renders_sales_inventory_and_upload_status_offline() -> None:
     assert "Inventory" in headers
     assert "Upload status" in headers
     assert "Uploader messages" in headers
+    assert "Investigations" in headers
     assert "Audit Log" in headers
-    assert len(app.dataframe) == 5
+    assert len(app.dataframe) == 6
     assert "quarantined" in set(app.dataframe[2].value["status"])
 
 
@@ -46,13 +47,29 @@ def test_dashboard_shows_superseded_uploads_and_their_history() -> None:
 
 def test_dashboard_audit_log_lists_safe_fixes_and_can_undo_one() -> None:
     app = AppTest.from_file(str(APP), default_timeout=120).run()
-    before = len(app.dataframe[4].value)
+    before = len(app.dataframe[5].value)
     assert before > 0
-    assert set(app.dataframe[4].value["Action"]) == {"safe_fix", "quarantine"}
+    assert set(app.dataframe[5].value["Action"]) == {"safe_fix", "quarantine", "alert"}
 
     app.button[0].click().run()
 
     assert not app.exception
-    log = app.dataframe[4].value
+    log = app.dataframe[5].value
     assert len(log) == before + 1
     assert log["Action"].iloc[0] == "undo"
+
+
+def test_dashboard_shows_investigations_with_their_evidence() -> None:
+    app = AppTest.from_file(str(APP), default_timeout=120).run()
+
+    investigations = app.dataframe[4].value
+    assert list(investigations["Anomaly"]) == ["stockout_risk"]
+    assert list(investigations["Sales Channel"]) == ["ST02"]
+    [expander] = app.expander[-1:]
+    assert "Stockout risk" in expander.label
+    shown = " ".join(m.value for m in expander.markdown)
+    assert "Evidence:" in shown and "days of cover" in shown and "Likely cause:" in shown
+    alerts = app.dataframe[5].value
+    alerts = alerts[alerts["Action"] == "alert"]
+    assert list(alerts["Tier"]) == [1]
+    assert list(alerts["Investigation"]) == list(investigations["Investigation"])

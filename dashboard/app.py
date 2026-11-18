@@ -12,8 +12,9 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
+from retail_ops_agent.anomalies import AnomalyKind
 from retail_ops_agent.defects import DefectKind
-from retail_ops_agent.generator import DefectPlan, ResubmissionKind, ResubmissionPlan
+from retail_ops_agent.generator import AnomalyPlan, DefectPlan, ResubmissionKind, ResubmissionPlan
 from retail_ops_agent.models import models_from_environment
 from retail_ops_agent.ops_day import OpsDay
 from retail_ops_agent.sandbox import build_sandbox
@@ -47,6 +48,10 @@ RESUBMISSIONS = [
         ("ST01", 10, UploadKind.INVENTORY, ResubmissionKind.CHANGED),
     ]
 ]
+# A demand surge planted at one Store, so there is a stockout risk to investigate and alert on.
+PLANTED_ANOMALIES = [
+    AnomalyPlan(kind=AnomalyKind.STOCKOUT_RISK, sales_channel="ST02", day=date(2026, 11, 12)),
+]
 UNDO_TAKEN_BY = "BI analyst (dashboard)"
 
 
@@ -60,6 +65,7 @@ def _sandbox() -> tuple[OpsDay, str]:
         days=DAYS,
         defects=PLANTED_DEFECTS,
         resubmissions=RESUBMISSIONS,
+        anomalies=PLANTED_ANOMALIES,
     ), label
 
 
@@ -67,7 +73,7 @@ ops_day, model_label = _sandbox()
 
 st.set_page_config(page_title="Cobalt Home: retail ops", layout="wide")
 st.title("Cobalt Home")
-st.caption(f"Fictional Client. Simulated data, seed {SEED}. Intake model: {model_label}.")
+st.caption(f"Fictional Client. Simulated data, seed {SEED}. Agent model: {model_label}.")
 
 st.header("Sales by Sales Channel")
 sales = pd.DataFrame([row.model_dump() for row in ops_day.sales_by_sales_channel()])
@@ -156,6 +162,50 @@ else:
         with st.expander(f"{m.sent_at:%Y-%m-%d %H:%M} to {m.recipient}: {m.subject}"):
             st.text(m.body)
 
+st.header("Investigations")
+investigations = ops_day.investigations()
+if not investigations:
+    st.info("No Anomalies investigated yet.")
+else:
+    st.caption(
+        "Anomalies are flagged by plain statistics; the Analyst agent investigates each with read-only "
+        "tools. A stockout risk is flagged when days of cover fall below the SKU's Lead Time."
+    )
+    st.dataframe(
+        pd.DataFrame(
+            [
+                {
+                    "day": i.anomaly.day,
+                    "Anomaly": i.anomaly.kind.value,
+                    "Sales Channel": i.anomaly.sales_channel,
+                    "SKU": i.anomaly.sku,
+                    "days of cover": i.anomaly.days_of_cover,
+                    "Lead Time (days)": i.anomaly.lead_time_days,
+                    "cause": i.cause,
+                    "recommended Action": i.recommended_action.kind.value,
+                    "Investigation": i.investigation_id,
+                }
+                for i in investigations
+            ]
+        ),
+        hide_index=True,
+    )
+    for i in investigations:
+        with st.expander(f"{i.anomaly.day}: {i.anomaly.summary}"):
+            st.markdown(f"**Likely cause:** {i.cause}")
+            st.markdown("**Evidence:**\n" + "\n".join(f"- {item}" for item in i.evidence))
+            st.markdown(
+                f"**Statistics that flagged it:** {i.anomaly.on_hand} units on hand; "
+                f"{i.anomaly.average_daily_units:.2f} units a day over {i.anomaly.sales_days} days of sales; "
+                f"{i.anomaly.days_of_cover:.1f} days of cover against a {i.anomaly.lead_time_days}-day "
+                "Lead Time."
+            )
+            st.markdown(
+                f"**Recommended Action ({i.recommended_action.kind.value}):** "
+                f"{i.recommended_action.description}"
+            )
+            st.caption(f"Investigated by the {i.investigated_by} at {i.investigated_at:%Y-%m-%d %H:%M}.")
+
 st.header("Audit Log")
 entries = ops_day.audit_log()
 if not entries:
@@ -172,6 +222,7 @@ else:
                     "taken by": e.taken_by,
                     "triggered by": e.triggered_by,
                     "summary": e.summary,
+                    "Investigation": e.investigation_id or "",
                     "how to undo": e.undo.description,
                     "undone by entry": e.undone_by,
                 }

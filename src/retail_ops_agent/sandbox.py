@@ -12,6 +12,7 @@ from retail_ops_agent.clock import SimulatedClock
 from retail_ops_agent.data_source import CsvDataSource
 from retail_ops_agent.erp import InMemoryErp
 from retail_ops_agent.generator import (
+    AnomalyPlan,
     DefectPlan,
     ResubmissionPlan,
     generate_catalog,
@@ -36,6 +37,7 @@ def build_sandbox(
     days: int,
     defects: Sequence[DefectPlan] = (),
     resubmissions: Sequence[ResubmissionPlan] = (),
+    anomalies: Sequence[AnomalyPlan] = (),
     upload_directory: Path | None = None,
     sales_channels: Sequence[str] | None = None,
     upload_kinds: Sequence[UploadKind] = tuple(UploadKind),
@@ -45,12 +47,14 @@ def build_sandbox(
     sales_channels and upload_kinds narrow which Uploads are submitted (every Sales Channel and both
     kinds by default), so an eval can keep its model calls few.
 
-    Uploads are clean except for the planned Defects. Each planned resubmission is submitted after
-    its day's Ops Day and processed by the next one, so it Supersedes the first Upload. The
-    ground-truth record of what was planted is written beside the Uploads.
+    Uploads are clean except for the planned Defects and Anomalies. Each planned resubmission is
+    submitted after its day's Ops Day and processed by the next one, so it Supersedes the first
+    Upload. The ground-truth record of what was planted is written beside the Uploads.
     """
     catalog = generate_catalog(seed)
-    generated = generate_uploads(generate_history(catalog, first_day, days), defects, resubmissions)
+    generated = generate_uploads(
+        generate_history(catalog, first_day, days, anomalies), defects, resubmissions
+    )
     clock = SimulatedClock(datetime.combine(first_day, UPLOAD_TIME))
     directory = upload_directory or Path(tempfile.mkdtemp(prefix="cobalt-home-uploads-"))
     directory.mkdir(parents=True, exist_ok=True)

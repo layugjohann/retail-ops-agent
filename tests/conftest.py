@@ -47,10 +47,37 @@ def scripted_intake_model(**output: object) -> TestModel:
     return TestModel(custom_output_args={"defects": [], "uploader_message": None, **output})
 
 
+def scripted_analyst_model(**output: object) -> TestModel:
+    """A scripted Analyst model that calls every read-only tool, then returns its Investigation."""
+    return TestModel(
+        custom_output_args={
+            "cause": "A demand surge drained the stock.",
+            "evidence": ["Sales over the last three days far above the SKU's usual rate."],
+            "recommended_action": {"kind": "alert", "description": "Alert the inventory planner."},
+            **output,
+        }
+    )
+
+
+def scripted_ops_model(**output: object) -> TestModel:
+    """A scripted Ops model that proposes an alert."""
+    return TestModel(
+        custom_output_args={"kind": "alert", "subject": "Stockout risk", "body": "Check stock.", **output}
+    )
+
+
+def scripted_models(intake: TestModel | None = None) -> Models:
+    return Models(
+        intake=intake or scripted_intake_model(),
+        analyst=scripted_analyst_model(),
+        ops=scripted_ops_model(),
+    )
+
+
 @pytest.fixture
 def ops_day(catalog: Catalog, clock: SimulatedClock, notifier: LogNotifier, tmp_path: Path) -> OpsDay:
     return OpsDay(
-        models=Models(intake=scripted_intake_model()),
+        models=scripted_models(),
         erp=InMemoryErp(catalog),
         notifier=notifier,
         data_source=CsvDataSource(tmp_path / "uploads"),
