@@ -1,0 +1,48 @@
+{
+  "id": "stockout-reorder-above-limit-rejected",
+  "description": "A demand surge drains a SKU at ST04 and detection flags a stockout risk on 2026-03-11. The Analyst should blame the surge and recommend a Reorder. With an Auto-approval Limit of 0 it waits in the Approval Queue; the inventory planner rejects it, so nothing reaches the ERP.",
+  "tags": [
+    "analyst",
+    "ops",
+    "stockout_risk",
+    "reorder",
+    "approval",
+    "store"
+  ],
+  "seed": 42,
+  "first_day": "2026-03-02",
+  "last_day": "2026-03-13",
+  "last_ops_day": "2026-03-11",
+  "sales_channels": [
+    "ST04"
+  ],
+  "upload_kinds": [
+    "sales",
+    "inventory"
+  ],
+  "planted": {
+    "anomalies": [
+      {
+        "kind": "stockout_risk",
+        "sales_channel": "ST04",
+        "day": "2026-03-13",
+        "cause": "demand_surge"
+      }
+    ]
+  },
+  "auto_approval_limit": 0.0,
+  "after_run": [
+    {
+      "step": "reject_pending"
+    }
+  ],
+  "expected_actions": [
+    {
+      "sales_channel": "ST04",
+      "anomaly_kind": "stockout_risk",
+      "action": "reorder",
+      "tier": 2,
+      "approval": "rejected"
+    }
+  ]
+}

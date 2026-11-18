@@ -1,0 +1,48 @@
+{
+  "id": "stockout-open-reorder-alert",
+  "description": "A demand surge drains a SKU at ST02 and detection flags a stockout risk on 2026-03-10, but the inventory planner already placed a Reorder of 60 units for it. The Analyst should blame the surge, find the open Reorder and recommend an alert rather than a second Reorder; the alert is a Tier 1 Action and nothing new reaches the ERP.",
+  "tags": [
+    "analyst",
+    "ops",
+    "stockout_risk",
+    "alert",
+    "open-reorder",
+    "store"
+  ],
+  "seed": 42,
+  "first_day": "2026-03-02",
+  "last_day": "2026-03-12",
+  "last_ops_day": "2026-03-10",
+  "sales_channels": [
+    "ST02"
+  ],
+  "upload_kinds": [
+    "sales",
+    "inventory"
+  ],
+  "planted": {
+    "anomalies": [
+      {
+        "kind": "stockout_risk",
+        "sales_channel": "ST02",
+        "day": "2026-03-12",
+        "cause": "demand_surge"
+      }
+    ]
+  },
+  "auto_approval_limit": 100000.0,
+  "open_reorders": [
+    {
+      "sales_channel": "ST02",
+      "quantity": 60
+    }
+  ],
+  "expected_actions": [
+    {
+      "sales_channel": "ST02",
+      "anomaly_kind": "stockout_risk",
+      "action": "alert",
+      "tier": 1
+    }
+  ]
+}

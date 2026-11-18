@@ -1,0 +1,50 @@
+{
+  "id": "stockout-reorder-above-limit-expires",
+  "description": "A demand surge drains a SKU at the Online Shop and detection flags a stockout risk on 2026-03-10. The Analyst should blame the surge and recommend a Reorder, which waits in the Approval Queue because it is above the Auto-approval Limit of 0. Nobody decides, 48 more simulated hours pass, and it Expires without reaching the ERP.",
+  "tags": [
+    "analyst",
+    "ops",
+    "stockout_risk",
+    "reorder",
+    "approval",
+    "expiry",
+    "online_shop"
+  ],
+  "seed": 42,
+  "first_day": "2026-03-02",
+  "last_day": "2026-03-12",
+  "last_ops_day": "2026-03-10",
+  "sales_channels": [
+    "ONLINE"
+  ],
+  "upload_kinds": [
+    "sales",
+    "inventory"
+  ],
+  "planted": {
+    "anomalies": [
+      {
+        "kind": "stockout_risk",
+        "sales_channel": "ONLINE",
+        "day": "2026-03-12",
+        "cause": "demand_surge"
+      }
+    ]
+  },
+  "auto_approval_limit": 0.0,
+  "after_run": [
+    {
+      "step": "advance_time",
+      "hours": 48
+    }
+  ],
+  "expected_actions": [
+    {
+      "sales_channel": "ONLINE",
+      "anomaly_kind": "stockout_risk",
+      "action": "reorder",
+      "tier": 2,
+      "approval": "expired"
+    }
+  ]
+}

@@ -17,7 +17,7 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 from pydantic_ai.models.test import TestModel
 
 from retail_ops_agent.defects import SAFE_FIX_TABLE, DefectKind
-from retail_ops_agent.evals.judge import UPLOADER_MESSAGE_RUBRIC
+from retail_ops_agent.evals.judge import INVESTIGATION_RUBRIC, UPLOADER_MESSAGE_RUBRIC
 from retail_ops_agent.evals.runner import DEFAULT_SCENARIOS, generate_scenario, main
 from retail_ops_agent.evals.scenarios import FIRST_SUBMISSION, Scenario, load_scenarios, select_scenarios
 from retail_ops_agent.evals.scorecard import Scorecard
@@ -26,9 +26,12 @@ from retail_ops_agent.generator import PLANTABLE_DEFECTS
 from retail_ops_agent.uploads import UploadStatus
 
 from .conftest import scripted_intake_model
+from .eval_models import scripted_eval_analyst, scripted_eval_ops
 
 SCENARIOS = Path(__file__).parent.parent / DEFAULT_SCENARIOS
 INTAKE = "scripted-intake"
+ANALYST = "scripted-analyst"
+OPS = "scripted-ops"
 JUDGE = "scripted-judge"
 STARTED = datetime(2026, 11, 19, 9, 30)
 
@@ -38,7 +41,7 @@ def _judge(failing: frozenset[str] = frozenset(), *, omit: frozenset[str] = froz
         custom_output_args={
             "verdicts": [
                 {"criterion": c.id, "passed": c.id not in failing, "reason": f"scripted verdict on {c.id}"}
-                for c in UPLOADER_MESSAGE_RUBRIC
+                for c in (*UPLOADER_MESSAGE_RUBRIC, *INVESTIGATION_RUBRIC)
                 if c.id not in omit
             ]
         }
@@ -46,13 +49,37 @@ def _judge(failing: frozenset[str] = frozenset(), *, omit: frozenset[str] = froz
 
 
 def _run(
-    tmp_path: Path, *args: str, intake: Model | None = None, judge: Model | None = None
+    tmp_path: Path,
+    *args: str,
+    intake: Model | None = None,
+    analyst: Model | None = None,
+    ops: Model | None = None,
+    judge: Model | None = None,
 ) -> tuple[int, str, Scorecard | None]:
-    models_by_name: dict[str, Model] = {INTAKE: intake or scripted_intake_model(), JUDGE: judge or _judge()}
+    models_by_name: dict[str, Model] = {
+        INTAKE: intake or scripted_intake_model(),
+        ANALYST: analyst or scripted_eval_analyst(),
+        OPS: ops or scripted_eval_ops(),
+        JUDGE: judge or _judge(),
+    }
     out = io.StringIO()
     output = tmp_path / "results"
     code = main(
-        ["--model", INTAKE, "--judge-model", JUDGE, "--rpm", "0", "--output", str(output), *args],
+        [
+            "--model",
+            INTAKE,
+            "--analyst-model",
+            ANALYST,
+            "--ops-model",
+            OPS,
+            "--judge-model",
+            JUDGE,
+            "--rpm",
+            "0",
+            "--output",
+            str(output),
+            *args,
+        ],
         env={},
         build_model=models_by_name.__getitem__,
         now=lambda: STARTED,
@@ -138,7 +165,15 @@ def test_the_scorecard_is_machine_readable_json(tmp_path: Path) -> None:
         "no_clean_quarantine",
         "upload_status",
         "bi_data",
+        "analyst_cause",
+        "ops_action",
+        "ops_tier",
+        "approval_queue",
+        "tier2_approval",
     ]
+    assert data["summary"]["hard_rule_held"] is True
+    assert data["summary"]["run_passed"] is True
+    assert data["agent_models"] == {"intake": INTAKE, "analyst": ANALYST, "ops": OPS}
 
 
 def test_runs_filter_by_tag_or_scenario(tmp_path: Path) -> None:

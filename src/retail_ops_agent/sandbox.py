@@ -11,7 +11,7 @@ from retail_ops_agent.action_policy import DEFAULT_AUTO_APPROVAL_LIMIT
 from retail_ops_agent.catalog import SalesChannelKind
 from retail_ops_agent.clock import SimulatedClock
 from retail_ops_agent.data_source import CsvDataSource
-from retail_ops_agent.erp import InMemoryErp
+from retail_ops_agent.erp import ErpClient, InMemoryErp
 from retail_ops_agent.generator import (
     AnomalyPlan,
     DefectPlan,
@@ -44,6 +44,7 @@ def build_sandbox(
     upload_kinds: Sequence[UploadKind] = tuple(UploadKind),
     auto_approval_limit: float = DEFAULT_AUTO_APPROVAL_LIMIT,
     run_days: int | None = None,
+    erp: ErpClient | None = None,
 ) -> OpsDay:
     """Submit every Sales Channel's sales and inventory Uploads for each day and process those Ops Days.
 
@@ -56,6 +57,9 @@ def build_sandbox(
     Uploads are clean except for the planned Defects and Anomalies. Each planned resubmission is
     submitted after its day's Ops Day and processed by the next one, so it Supersedes the first
     Upload. The ground-truth record of what was planted is written beside the Uploads.
+
+    erp is the ERP the sandbox's Ops Day uses; by default a fresh in-memory fake seeded from the
+    catalog. An eval passes its own so it can see every Reorder that reached the ERP.
     """
     catalog = generate_catalog(seed)
     generated = generate_uploads(
@@ -67,7 +71,7 @@ def build_sandbox(
     generated.ground_truth.write(directory / GROUND_TRUTH_FILE)
     ops_day = OpsDay(
         models=models,
-        erp=InMemoryErp(catalog),
+        erp=erp if erp is not None else InMemoryErp(catalog),
         notifier=LogNotifier(),
         data_source=CsvDataSource(directory),
         clock=clock,
