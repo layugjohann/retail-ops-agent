@@ -4,7 +4,8 @@
 
 **Blocked by:** 08, 09
 
-**Status:** in-progress
+**Status:** awaiting-merge
+**Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/9
 
 - [ ] A Reorder never reaches the ERP without Approval or the Auto-approval Limit (tested, including with a scripted model that tries to bypass it)
 - [ ] No agent tool can place a Reorder directly
@@ -29,3 +30,5 @@ Usage: Implementer 68 input, 35,943 output, 109,918 cache creation, 3,135,943 ca
 **Gate passed**: every command exited 0 (log: `.sandcastle/logs/gate-10-2026-11-18T19-40-08-206Z.log`).
 
 Usage: Body writer 2 input, 1,765 output, 43,906 cache creation, 11,615 cache read.
+
+**Pull Request opened**: https://github.com/layugjohann/retail-ops-agent/pull/9
