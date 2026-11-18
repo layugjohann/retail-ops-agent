@@ -4,7 +4,8 @@
 
 **Blocked by:** 04, 06
 
-**Status:** in-progress
+**Status:** awaiting-merge
+**Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/6
 
 - [ ] Scenario format: id, tags, seed, day range, planted items, expected outcomes
 - [ ] Deterministic Intake graders: Defect precision and recall, Safe Fix correctness, no Quarantine of clean Uploads
@@ -30,3 +31,5 @@ Usage: Implementer 72 input, 54,337 output, 133,195 cache creation, 3,732,752 ca
 **Gate passed**: every command exited 0 (log: `.sandcastle/logs/gate-07-2026-11-18T17-19-14-641Z.log`).
 
 Usage: Body writer 2 input, 1,418 output, 58,752 cache creation, 11,615 cache read.
+
+**Pull Request opened**: https://github.com/layugjohann/retail-ops-agent/pull/6
