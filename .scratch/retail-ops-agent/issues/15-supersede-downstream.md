@@ -5,7 +5,7 @@
 **Blocked by:** 05, 10, 12
 **Stacked on:** issue/14-data-problem-loop
 
-**Status:** awaiting-merge
+**Status:** done
 **Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/14
 
 - [ ] Anomalies that no longer hold after a resubmission are cleared

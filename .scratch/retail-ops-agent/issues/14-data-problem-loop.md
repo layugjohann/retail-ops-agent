@@ -5,7 +5,7 @@
 **Blocked by:** 04, 13
 **Stacked on:** issue/13-more-anomaly-kinds
 
-**Status:** awaiting-merge
+**Status:** done
 **Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/13
 
 - [ ] The generator can plant a cases-instead-of-units Upload that passes validation

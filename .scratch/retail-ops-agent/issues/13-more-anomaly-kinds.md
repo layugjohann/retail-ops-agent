@@ -4,7 +4,7 @@
 
 **Blocked by:** 09, 12
 
-**Status:** awaiting-merge
+**Status:** done
 **Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/12
 
 - [ ] Deterministic detection for a sales drop at one Sales Channel (compared with its own history and with other Sales Channels), spikes and slow movers
