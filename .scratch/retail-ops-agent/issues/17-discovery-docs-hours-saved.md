@@ -5,7 +5,7 @@
 **Blocked by:** 03
 **Stacked on:** issue/18-replay-mode
 
-**Status:** in-progress
+**Status:** done
 
 - [ ] An engagement brief based on the job posting's responsibilities, with no company named
 - [ ] Personas: store manager, inventory planner, BI analyst, e-commerce lead
@@ -30,3 +30,9 @@ Usage: Implementer 52 input, 28,114 output, 91,791 cache creation, 1,957,475 cac
 **Gate passed**: every command exited 0 (log: `.sandcastle/logs/gate-17-2026-11-19T19-13-25-431Z.log`).
 
 Usage: Body writer 2 input, 1,171 output, 38,048 cache creation, 11,842 cache read.
+
+**Could not publish the Pull Request**
+
+```
+`gh pr create` failed: pull request create failed: GraphQL: Head sha can't be blank, Base sha can't be blank, No commits between issue/18-replay-mode and issue/17-discovery-docs-hours-saved, Base ref must be a branch (createPullRequest)
+```
