@@ -4,10 +4,12 @@
 
 **Blocked by:** 18
 
-**Status:** ready-for-human
+**Status:** done
 
-- [ ] Streamlit Community Cloud account connected to the GitHub repo (make the repo public first if needed)
-- [ ] App deployed and opening in Replay Mode
-- [ ] Public URL added to the README
+- [x] Streamlit Community Cloud account connected to the GitHub repo (make the repo public first if needed)
+- [x] App deployed and opening in Replay Mode
+- [x] Public URL added to the README
 
 ## Comments
+
+**2026-11-20:** Deployed with `make deploy`. The repository is now public (git history checked for committed keys first; none found). The app is live at https://cobalt-home-ops.streamlit.app/ and opens in Replay Mode, with no secrets configured. The link is in the README. The recordings are still from the offline scripted model; re-recording them with a free-tier key is a follow-up.

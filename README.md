@@ -1,5 +1,7 @@
 # retail-ops-agent
 
+**Live demo (Replay Mode):** https://cobalt-home-ops.streamlit.app/
+
 A working prototype of a forward-deployed engagement at **Cobalt Home**, a fictional home and
 lifestyle retailer (6 Stores, an Online Shop, about 300 SKUs). All data is simulated.
 
