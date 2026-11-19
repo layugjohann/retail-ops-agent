@@ -98,6 +98,22 @@ _Avoid_: Run, batch, job, daily run
 A statistically unusual pattern in valid data that may mean a business problem, such as a stockout risk or a sales drop at one Store.
 _Avoid_: Alert, outlier, issue
 
+**Sales Drop**:
+An Anomaly in which one Sales Channel sells far below its own usual rate while the other Sales Channels do not; a drop every Sales Channel shares is a Lookalike, not a Sales Drop.
+_Avoid_: Slump, dip, downturn
+
+**Sales Spike**:
+An Anomaly in which one SKU sells several times its usual rate at one Sales Channel while the other Sales Channels sell it as usual.
+_Avoid_: Surge, burst, peak
+
+**Slow Mover**:
+An Anomaly in which a SKU that used to sell steadily at a Sales Channel all but stops selling there while plenty of stock sits on hand.
+_Avoid_: Dead stock, overstock, slow seller
+
+**Lookalike**:
+A chain-wide pattern, such as a dip in sales or a promotion at every Sales Channel, that looks like a Sales Drop or Sales Spike at each Sales Channel but must not be blamed on any one of them; the generator plants Lookalikes so evals can check they are not flagged.
+_Avoid_: False positive, decoy, red herring
+
 **Days of Cover**:
 How many days the units of a SKU on hand at a Sales Channel would last at its recent average daily sales; a stockout risk is flagged when it falls below the SKU's Lead Time.
 _Avoid_: Runway, stock days, weeks of supply

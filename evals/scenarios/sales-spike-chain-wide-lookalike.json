@@ -1,0 +1,30 @@
+{
+  "id": "sales-spike-chain-wide-lookalike",
+  "description": "A chain-wide promotion from 2026-03-09: one SKU is sold 30% off at every Sales Channel and sells several times its usual rate everywhere for three days. It spikes at each Store as much as a local price cut would, but the other Sales Channels spike too, so no sales spike should be flagged at any one Store and nothing should be investigated.",
+  "tags": [
+    "lookalike",
+    "sales_spike",
+    "chain-wide",
+    "store"
+  ],
+  "seed": 42,
+  "first_day": "2026-03-02",
+  "last_day": "2026-03-11",
+  "sales_channels": [
+    "ST01",
+    "ST02",
+    "ST06"
+  ],
+  "upload_kinds": [
+    "sales"
+  ],
+  "planted": {
+    "lookalikes": [
+      {
+        "kind": "sales_spike",
+        "day": "2026-03-11",
+        "cause": "chain_wide_promotion"
+      }
+    ]
+  }
+}

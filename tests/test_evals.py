@@ -169,6 +169,7 @@ def test_the_scorecard_is_machine_readable_json(tmp_path: Path) -> None:
         "ops_action",
         "ops_tier",
         "approval_queue",
+        "lookalikes",
         "tier2_approval",
     ]
     assert data["summary"]["hard_rule_held"] is True

@@ -15,6 +15,7 @@ from retail_ops_agent.erp import ErpClient, InMemoryErp
 from retail_ops_agent.generator import (
     AnomalyPlan,
     DefectPlan,
+    LookalikePlan,
     ResubmissionPlan,
     generate_catalog,
     generate_history,
@@ -39,6 +40,7 @@ def build_sandbox(
     defects: Sequence[DefectPlan] = (),
     resubmissions: Sequence[ResubmissionPlan] = (),
     anomalies: Sequence[AnomalyPlan] = (),
+    lookalikes: Sequence[LookalikePlan] = (),
     upload_directory: Path | None = None,
     sales_channels: Sequence[str] | None = None,
     upload_kinds: Sequence[UploadKind] = tuple(UploadKind),
@@ -54,7 +56,7 @@ def build_sandbox(
     run_days, if given, runs only that many of the generated days, so the sandbox can stop while a
     Reorder queued from a planted Anomaly is still within its 48 simulated hours.
 
-    Uploads are clean except for the planned Defects and Anomalies. Each planned resubmission is
+    Uploads are clean except for the planned Defects, Anomalies and lookalikes. Each planned resubmission is
     submitted after its day's Ops Day and processed by the next one, so it Supersedes the first
     Upload. The ground-truth record of what was planted is written beside the Uploads.
 
@@ -63,7 +65,7 @@ def build_sandbox(
     """
     catalog = generate_catalog(seed)
     generated = generate_uploads(
-        generate_history(catalog, first_day, days, anomalies), defects, resubmissions
+        generate_history(catalog, first_day, days, anomalies, lookalikes), defects, resubmissions
     )
     clock = SimulatedClock(datetime.combine(first_day, UPLOAD_TIME))
     directory = upload_directory or Path(tempfile.mkdtemp(prefix="cobalt-home-uploads-"))

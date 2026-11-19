@@ -175,7 +175,11 @@ if not investigations:
 else:
     st.caption(
         "Anomalies are flagged by plain statistics; the Analyst agent investigates each with read-only "
-        "tools. A stockout risk is flagged when days of cover fall below the SKU's Lead Time."
+        "tools. A stockout risk is flagged when days of cover fall below the SKU's Lead Time; a sales "
+        "drop when one Sales Channel sells far below its usual rate while the others do not; a sales "
+        "spike when a SKU sells several times its usual rate at one Sales Channel only; a slow mover "
+        "when a SKU all but stops selling while plenty of stock sits on hand. A drop or spike the "
+        "whole chain shares is not blamed on one Sales Channel."
     )
     st.dataframe(
         pd.DataFrame(
@@ -184,9 +188,7 @@ else:
                     "day": i.anomaly.day,
                     "Anomaly": i.anomaly.kind.value,
                     "Sales Channel": i.anomaly.sales_channel,
-                    "SKU": i.anomaly.sku,
-                    "days of cover": i.anomaly.days_of_cover,
-                    "Lead Time (days)": i.anomaly.lead_time_days,
+                    "SKU": i.anomaly.sku or "every SKU",
                     "cause": i.cause,
                     "recommended Action": i.recommended_action.kind.value,
                     "Investigation": i.investigation_id,
@@ -200,12 +202,7 @@ else:
         with st.expander(f"{i.anomaly.day}: {i.anomaly.summary}"):
             st.markdown(f"**Likely cause:** {i.cause}")
             st.markdown("**Evidence:**\n" + "\n".join(f"- {item}" for item in i.evidence))
-            st.markdown(
-                f"**Statistics that flagged it:** {i.anomaly.on_hand} units on hand; "
-                f"{i.anomaly.average_daily_units:.2f} units a day over {i.anomaly.sales_days} days of sales; "
-                f"{i.anomaly.days_of_cover:.1f} days of cover against a {i.anomaly.lead_time_days}-day "
-                "Lead Time."
-            )
+            st.markdown(f"**Statistics that flagged it:** {i.anomaly.summary}.")
             st.markdown(
                 f"**Recommended Action ({i.recommended_action.kind.value}):** "
                 f"{i.recommended_action.description}"

@@ -1,0 +1,39 @@
+{
+  "id": "slow-mover-one-store",
+  "description": "Demand for a steadily selling SKU at ST06 fades from 2026-03-16: it all but stops selling there while its stock stays on hand. After two weeks of usual trading, detection should flag a slow mover on 2026-03-22 or 2026-03-23. The Analyst should blame fading demand, not a stock or data problem, and the Ops agent should alert the inventory planner at Tier 1 to stop reordering it. A slow mover is never answered with a Reorder.",
+  "tags": [
+    "analyst",
+    "ops",
+    "slow_mover",
+    "alert",
+    "store"
+  ],
+  "seed": 42,
+  "first_day": "2026-03-02",
+  "last_day": "2026-03-23",
+  "sales_channels": [
+    "ST06"
+  ],
+  "upload_kinds": [
+    "sales",
+    "inventory"
+  ],
+  "planted": {
+    "anomalies": [
+      {
+        "kind": "slow_mover",
+        "sales_channel": "ST06",
+        "day": "2026-03-23",
+        "cause": "fading_demand"
+      }
+    ]
+  },
+  "expected_actions": [
+    {
+      "sales_channel": "ST06",
+      "anomaly_kind": "slow_mover",
+      "action": "alert",
+      "tier": 1
+    }
+  ]
+}

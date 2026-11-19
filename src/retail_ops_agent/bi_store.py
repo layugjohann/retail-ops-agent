@@ -6,6 +6,7 @@ import json
 from datetime import date, datetime
 
 import duckdb
+from pydantic import TypeAdapter
 
 from retail_ops_agent.analyst import Investigation
 from retail_ops_agent.anomalies import Anomaly
@@ -66,6 +67,8 @@ CREATE TABLE IF NOT EXISTS uploader_messages (
     body          VARCHAR NOT NULL
 );
 """
+
+_ANOMALY: TypeAdapter[Anomaly] = TypeAdapter(Anomaly)
 
 # Upload statuses whose rows are in the BI data.
 _LOADED = "'accepted', 'safe_fixed'"
@@ -179,7 +182,7 @@ class BiStore:
     def record_anomaly(self, anomaly: Anomaly) -> None:
         self._db.execute(
             "INSERT INTO anomalies VALUES (?, ?, ?)",
-            [anomaly.anomaly_id, anomaly.day, anomaly.model_dump_json()],
+            [anomaly.anomaly_id, anomaly.day, _ANOMALY.dump_json(anomaly).decode()],
         )
 
     def anomaly_ids(self) -> set[str]:
@@ -188,7 +191,7 @@ class BiStore:
     def anomalies(self) -> list[Anomaly]:
         """Every Anomaly flagged, oldest first."""
         rows = self._db.execute("SELECT anomaly FROM anomalies ORDER BY day, anomaly_id").fetchall()
-        return [Anomaly.model_validate_json(r[0]) for r in rows]
+        return [_ANOMALY.validate_json(r[0]) for r in rows]
 
     def record_investigation(self, investigation: Investigation) -> None:
         self._db.execute(
@@ -329,15 +332,29 @@ class BiStore:
         ).fetchall()
         return {r[0]: r[1] for r in rows}
 
-    def daily_sales(self, sales_channel: str, sku: str, first: date, last: date) -> list[tuple[date, int]]:
-        """Accepted units of the SKU sold at the Sales Channel each day with accepted sales."""
+    def daily_sales(
+        self, sales_channel: str, sku: str, first: date, last: date
+    ) -> list[tuple[date, int, float]]:
+        """Accepted units and net sales of the SKU at the Sales Channel each day with accepted sales."""
         rows = self._db.execute(
-            "SELECT s.day, SUM(s.quantity_sold) FROM sales s JOIN uploads u USING (upload_id) "
+            "SELECT s.day, SUM(s.quantity_sold), SUM(s.net_sales) "
+            "FROM sales s JOIN uploads u USING (upload_id) "
             f"WHERE u.status IN ({_LOADED}) AND s.sales_channel = ? AND s.sku = ? "
             "AND s.day BETWEEN ? AND ? GROUP BY s.day ORDER BY s.day",
             [sales_channel, sku, first, last],
         ).fetchall()
-        return [(r[0], int(r[1])) for r in rows]
+        return [(r[0], int(r[1]), float(r[2])) for r in rows]
+
+    def daily_sales_channel_totals(self, first: date, last: date) -> list[tuple[date, str, int]]:
+        """Accepted units sold, every SKU together, per day and Sales Channel with accepted sales."""
+        rows = self._db.execute(
+            "SELECT s.day, s.sales_channel, SUM(s.quantity_sold) "
+            "FROM sales s JOIN uploads u USING (upload_id) "
+            f"WHERE u.status IN ({_LOADED}) AND s.day BETWEEN ? AND ? "
+            "GROUP BY s.day, s.sales_channel ORDER BY s.day, s.sales_channel",
+            [first, last],
+        ).fetchall()
+        return [(r[0], r[1], int(r[2])) for r in rows]
 
     def daily_stock(self, sales_channel: str, sku: str, first: date, last: date) -> list[tuple[date, int]]:
         """Accepted units of the SKU on hand at the Sales Channel at the end of each day."""

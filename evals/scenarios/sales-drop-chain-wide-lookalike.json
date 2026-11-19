@@ -1,0 +1,30 @@
+{
+  "id": "sales-drop-chain-wide-lookalike",
+  "description": "A chain-wide dip from 2026-03-09: for three days every Sales Channel sells well under its usual rate. Each Store's sales fall as far as in a one-store drop, but the other Sales Channels fall just as far, so no sales drop should be flagged at any one Store and nothing should be investigated.",
+  "tags": [
+    "lookalike",
+    "sales_drop",
+    "chain-wide",
+    "store"
+  ],
+  "seed": 42,
+  "first_day": "2026-03-02",
+  "last_day": "2026-03-11",
+  "sales_channels": [
+    "ST01",
+    "ST02",
+    "ST03"
+  ],
+  "upload_kinds": [
+    "sales"
+  ],
+  "planted": {
+    "lookalikes": [
+      {
+        "kind": "sales_drop",
+        "day": "2026-03-11",
+        "cause": "chain_wide_dip"
+      }
+    ]
+  }
+}

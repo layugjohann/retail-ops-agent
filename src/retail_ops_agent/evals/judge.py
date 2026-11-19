@@ -81,9 +81,9 @@ INVESTIGATION_RUBRIC: tuple[Criterion, ...] = (
     ),
     Criterion(
         id="recommends_specific_action",
-        text="Recommends a specific next Action for this SKU at this Sales Channel that follows from the "
-        "cause: for a Reorder, roughly how much and why; for an alert, what the inventory planner "
-        "should check.",
+        text="Recommends a specific next Action for this SKU or Sales Channel that follows from the "
+        "cause: for a Reorder, roughly how much and why; for an alert, what the person alerted "
+        "should check or do.",
     ),
     Criterion(
         id="plain_language",

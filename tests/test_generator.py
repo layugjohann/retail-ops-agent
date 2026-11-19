@@ -18,6 +18,8 @@ from retail_ops_agent.generator import (
     DefectPlan,
     GroundTruth,
     History,
+    LookalikeCause,
+    LookalikePlan,
     ResubmissionKind,
     ResubmissionPlan,
     generate_catalog,
@@ -454,3 +456,142 @@ def test_planted_stockout_risks_are_deterministic_and_vary_with_the_plan() -> No
 def test_a_stockout_risk_that_cannot_be_planted_is_refused(plan: AnomalyPlan) -> None:
     with pytest.raises(ValueError):
         generate_history(generate_catalog(11), _RISK_FIRST_DAY, 12, [plan])
+
+
+_CAUSE_FIRST_DAY = date(2026, 3, 2)
+_CAUSE_DAY = date(2026, 3, 11)
+_FADE_DAY = date(2026, 3, 23)
+
+
+def _usual_and_during(
+    history: History, channels: list[str], sku: str | None, first: date, last: date
+) -> tuple[float, float]:
+    def units(day: date) -> int:
+        return sum(
+            r.quantity_sold for c in channels for r in history.sales(c, day) if sku is None or r.sku == sku
+        )
+
+    before = [d for d in history.days if d < first]
+    during = [d for d in history.days if first <= d <= last]
+    return sum(map(units, before)) / len(before), sum(map(units, during)) / len(during)
+
+
+def test_a_planted_sales_drop_is_a_footfall_drop_across_every_sku_at_one_sales_channel() -> None:
+    catalog = generate_catalog(42)
+    plan = AnomalyPlan(kind=AnomalyKind.SALES_DROP, sales_channel="ST02", day=_CAUSE_DAY)
+    history = generate_history(catalog, _CAUSE_FIRST_DAY, 10, [plan])
+
+    [planted] = generate_uploads(history).ground_truth.anomalies
+    assert (planted.cause, planted.sku) == (AnomalyCause.FOOTFALL_DROP, None)
+    usual, during = _usual_and_during(history, ["ST02"], None, planted.cause_starts_on, planted.day)
+    assert during < 0.5 * usual
+    assert planted.units_sold == tuple(
+        sum(r.quantity_sold for r in history.sales("ST02", d)) for d in history.days[-3:]
+    )
+    other_usual, other_during = _usual_and_during(
+        history, ["ST01", "ST03"], None, planted.cause_starts_on, planted.day
+    )
+    assert other_during > 0.8 * other_usual
+
+
+def test_a_planted_sales_spike_is_a_local_price_cut_the_net_sales_reveal() -> None:
+    catalog = generate_catalog(42)
+    plan = AnomalyPlan(kind=AnomalyKind.SALES_SPIKE, sales_channel="ST02", day=_CAUSE_DAY)
+    history = generate_history(catalog, _CAUSE_FIRST_DAY, 10, [plan])
+
+    [planted] = generate_uploads(history).ground_truth.anomalies
+    assert planted.cause is AnomalyCause.PRICE_CUT and planted.sku is not None
+    price = next(s.retail_price for s in catalog.skus if s.code == planted.sku)
+    usual, during = _usual_and_during(history, ["ST02"], planted.sku, planted.cause_starts_on, planted.day)
+    assert during > 3 * usual
+    for day in history.days:
+        [row] = [r for r in history.sales("ST02", day) if r.sku == planted.sku]
+        if row.quantity_sold:
+            cut = planted.cause_starts_on <= day
+            assert row.net_sales / row.quantity_sold == pytest.approx(price * (0.7 if cut else 1.0), abs=0.01)
+    # The other Sales Channels sell it at full price.
+    for row in history.sales("ST01", _CAUSE_DAY):
+        if row.sku == planted.sku and row.quantity_sold:
+            assert row.net_sales == round(row.quantity_sold * price, 2)
+
+
+def test_a_planted_slow_mover_is_fading_demand_with_stock_left_on_hand() -> None:
+    catalog = generate_catalog(42)
+    plan = AnomalyPlan(kind=AnomalyKind.SLOW_MOVER, sales_channel="ST06", day=_FADE_DAY)
+    history = generate_history(catalog, _CAUSE_FIRST_DAY, 22, [plan])
+
+    [planted] = generate_uploads(history).ground_truth.anomalies
+    assert planted.cause is AnomalyCause.FADING_DEMAND and planted.sku is not None
+    usual, during = _usual_and_during(history, ["ST06"], planted.sku, planted.cause_starts_on, planted.day)
+    assert usual >= 2.5 and during <= 0.1 * usual
+    on_hand = next(r.on_hand for r in history.inventory("ST06", _FADE_DAY) if r.sku == planted.sku)
+    assert on_hand >= 20
+
+
+@pytest.mark.parametrize(
+    ("kind", "cause", "sku"),
+    [
+        (AnomalyKind.SALES_DROP, LookalikeCause.CHAIN_WIDE_DIP, False),
+        (AnomalyKind.SALES_SPIKE, LookalikeCause.CHAIN_WIDE_PROMOTION, True),
+    ],
+)
+def test_a_planted_lookalike_moves_every_sales_channel_alike(
+    kind: AnomalyKind, cause: LookalikeCause, sku: bool
+) -> None:
+    catalog = generate_catalog(42)
+    history = generate_history(catalog, _CAUSE_FIRST_DAY, 10, (), [LookalikePlan(kind=kind, day=_CAUSE_DAY)])
+
+    truth = generate_uploads(history).ground_truth
+    [planted] = truth.lookalikes
+    assert truth.anomalies == ()
+    assert (planted.kind, planted.cause, planted.sku is not None) == (kind, cause, sku)
+    channels = [c.code for c in catalog.sales_channels]
+    usual, during = _usual_and_during(history, channels, planted.sku, planted.cause_starts_on, planted.day)
+    assert during < 0.5 * usual if kind is AnomalyKind.SALES_DROP else during > 2.5 * usual
+
+
+def test_planted_kinds_are_deterministic_and_written_to_the_ground_truth(tmp_path: Path) -> None:
+    catalog = generate_catalog(42)
+    anomalies = [AnomalyPlan(kind=AnomalyKind.SALES_SPIKE, sales_channel="ST02", day=_CAUSE_DAY)]
+    lookalikes = [LookalikePlan(kind=AnomalyKind.SALES_DROP, day=_FADE_DAY)]
+
+    def truth() -> GroundTruth:
+        return generate_uploads(
+            generate_history(catalog, _CAUSE_FIRST_DAY, 22, anomalies, lookalikes)
+        ).ground_truth
+
+    assert truth() == truth()
+    truth().write(tmp_path / "truth.json")
+    assert GroundTruth.read(tmp_path / "truth.json") == truth()
+
+
+def test_a_plan_takes_the_cause_of_its_kind_and_refuses_another() -> None:
+    plan = AnomalyPlan(kind=AnomalyKind.SALES_DROP, sales_channel="ST02", day=_CAUSE_DAY)
+    assert plan.cause is AnomalyCause.FOOTFALL_DROP
+    with pytest.raises(ValueError, match="has the cause footfall_drop"):
+        AnomalyPlan.model_validate(
+            {"kind": "sales_drop", "sales_channel": "ST02", "day": "2026-03-11", "cause": "demand_surge"}
+        )
+    with pytest.raises(ValueError, match="no lookalike of kind stockout_risk"):
+        LookalikePlan(kind=AnomalyKind.STOCKOUT_RISK, day=_CAUSE_DAY)
+
+
+@pytest.mark.parametrize(
+    ("anomalies", "lookalikes"),
+    [
+        # Not a week of trading before the cause.
+        ([AnomalyPlan(kind=AnomalyKind.SALES_DROP, sales_channel="ST02", day=date(2026, 3, 5))], []),
+        # Not two weeks of trading before fading demand.
+        ([AnomalyPlan(kind=AnomalyKind.SLOW_MOVER, sales_channel="ST06", day=_CAUSE_DAY)], []),
+        # A lookalike overlaps a planted Anomaly at every Sales Channel.
+        (
+            [AnomalyPlan(kind=AnomalyKind.SALES_SPIKE, sales_channel="ST02", day=_CAUSE_DAY)],
+            [LookalikePlan(kind=AnomalyKind.SALES_DROP, day=_CAUSE_DAY)],
+        ),
+    ],
+)
+def test_a_cause_that_cannot_be_planted_is_refused(
+    anomalies: list[AnomalyPlan], lookalikes: list[LookalikePlan]
+) -> None:
+    with pytest.raises(ValueError):
+        generate_history(generate_catalog(42), _CAUSE_FIRST_DAY, 10, anomalies, lookalikes)

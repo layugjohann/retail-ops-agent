@@ -1,0 +1,40 @@
+{
+  "id": "sales-spike-one-store",
+  "description": "A SKU is sold 30% off at ST02 only from 2026-03-09 and sells several times its usual rate there for three days, while ST01 and ST06 sell it as usual at the full price. Detection should flag a sales spike at ST02. The Analyst should find the lower price a unit and blame the local price cut, and the Ops agent should alert the merchandiser at Tier 1. A spike that leaves plenty of stock is never answered with a Reorder.",
+  "tags": [
+    "analyst",
+    "ops",
+    "sales_spike",
+    "alert",
+    "store"
+  ],
+  "seed": 42,
+  "first_day": "2026-03-02",
+  "last_day": "2026-03-11",
+  "sales_channels": [
+    "ST01",
+    "ST02",
+    "ST06"
+  ],
+  "upload_kinds": [
+    "sales"
+  ],
+  "planted": {
+    "anomalies": [
+      {
+        "kind": "sales_spike",
+        "sales_channel": "ST02",
+        "day": "2026-03-11",
+        "cause": "price_cut"
+      }
+    ]
+  },
+  "expected_actions": [
+    {
+      "sales_channel": "ST02",
+      "anomaly_kind": "sales_spike",
+      "action": "alert",
+      "tier": 1
+    }
+  ]
+}

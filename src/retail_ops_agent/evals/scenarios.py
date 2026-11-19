@@ -18,7 +18,7 @@ from retail_ops_agent.anomalies import AnomalyKind
 from retail_ops_agent.approval_queue import ApprovalStatus
 from retail_ops_agent.audit_log import ActionTier
 from retail_ops_agent.defects import DefectKind
-from retail_ops_agent.generator import AnomalyPlan, DefectPlan, ResubmissionPlan
+from retail_ops_agent.generator import AnomalyPlan, DefectPlan, LookalikePlan, ResubmissionPlan
 from retail_ops_agent.ops_agent import ProposedActionKind
 from retail_ops_agent.uploads import UploadKind, UploadStatus
 
@@ -33,11 +33,13 @@ class PlantedItems(BaseModel):
     defects: tuple[DefectPlan, ...] = ()
     resubmissions: tuple[ResubmissionPlan, ...] = ()
     anomalies: tuple[AnomalyPlan, ...] = ()
+    # Chain-wide patterns that must not be blamed on one Sales Channel; no Action is expected for them.
+    lookalikes: tuple[LookalikePlan, ...] = ()
 
 
 class OpenReorder(BaseModel):
     """A Reorder already placed in the ERP before the Scenario's first Ops Day, outside the Approval
-    Queue, for the SKU of the Anomaly planted at the Sales Channel. It stands for one the inventory
+    Queue, for the SKU of the stockout risk planted at the Sales Channel. It stands for one the inventory
     planner placed earlier, so an Investigation should find it rather than order again."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -185,8 +187,11 @@ class Scenario(BaseModel):
         if len(channels) != len(set(channels)):
             raise ValueError("more than one open Reorder at a Sales Channel")
         for channel in channels:
-            if channel not in {c for c, _ in planted}:
-                raise ValueError(f"an open Reorder at {channel}, where no Anomaly is planted")
+            if (channel, AnomalyKind.STOCKOUT_RISK) not in planted:
+                raise ValueError(f"an open Reorder at {channel}, where no stockout risk is planted")
+        lookalikes = [p.kind for p in self.planted.lookalikes]
+        if len(lookalikes) != len(set(lookalikes)):
+            raise ValueError("more than one lookalike of a kind is planted")
 
     @property
     def days(self) -> int:

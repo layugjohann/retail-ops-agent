@@ -17,6 +17,7 @@ from typing import TextIO
 
 from pydantic_ai.models import Model, infer_model
 
+from retail_ops_agent.anomalies import AnomalyKind
 from retail_ops_agent.defects import location_in_words
 from retail_ops_agent.erp import InMemoryErp
 from retail_ops_agent.evals.action_graders import ActionsObserved, grade_actions, investigations_of
@@ -63,7 +64,11 @@ def generate_scenario(scenario: Scenario) -> GeneratedUploads:
     """The Scenario's Uploads and ground truth. Deterministic, so it matches what the sandbox submits."""
     return generate_uploads(
         generate_history(
-            generate_catalog(scenario.seed), scenario.first_day, scenario.days, scenario.planted.anomalies
+            generate_catalog(scenario.seed),
+            scenario.first_day,
+            scenario.days,
+            scenario.planted.anomalies,
+            scenario.planted.lookalikes,
         ),
         scenario.planted.defects,
         scenario.planted.resubmissions,
@@ -76,11 +81,16 @@ def run_scenario(
     """Place the Scenario's open Reorders, submit its Uploads and run its Ops Days through the Ops Day
     boundary, then take its after-run steps. Returns the Ops Day with every Reorder in the ERP."""
     erp = InMemoryErp(generate_catalog(scenario.seed))
-    planted = {a.sales_channel: a for a in generated.ground_truth.anomalies}
+    # An open Reorder is for the SKU of the stockout risk planted at its Sales Channel.
+    planted = {
+        a.sales_channel: a.sku
+        for a in generated.ground_truth.anomalies
+        if a.kind is AnomalyKind.STOCKOUT_RISK and a.sku is not None
+    }
     preexisting = frozenset(
         erp.place_reorder(
             sales_channel=open_reorder.sales_channel,
-            sku=planted[open_reorder.sales_channel].sku,
+            sku=planted[open_reorder.sales_channel],
             quantity=open_reorder.quantity,
         ).reorder_id
         for open_reorder in scenario.open_reorders
@@ -93,6 +103,7 @@ def run_scenario(
         defects=scenario.planted.defects,
         resubmissions=scenario.planted.resubmissions,
         anomalies=scenario.planted.anomalies,
+        lookalikes=scenario.planted.lookalikes,
         upload_directory=directory,
         sales_channels=scenario.sales_channels,
         upload_kinds=scenario.upload_kinds,
@@ -116,17 +127,38 @@ def run_scenario(
 _CAUSES: dict[AnomalyCause, str] = {
     AnomalyCause.DEMAND_SURGE: "a demand surge. The SKU sold far beyond its usual rate at the Sales "
     "Channel for a few days, draining its stock faster than a Restock could arrive",
+    AnomalyCause.FOOTFALL_DROP: "a footfall drop. Fewer shoppers came to the Sales Channel for a few "
+    "days, so every category sold well under its usual rate there while stock stayed on hand and the "
+    "other Sales Channels sold as usual",
+    AnomalyCause.PRICE_CUT: "a local price cut. The SKU was sold at a 30% discount at this Sales Channel "
+    "only for a few days, so its net sales a unit fell and it sold several times its usual rate, while "
+    "the other Sales Channels sold it as usual at the full price",
+    AnomalyCause.FADING_DEMAND: "fading demand. The SKU, which used to sell steadily at the Sales "
+    "Channel, all but stopped selling there while its stock stayed on hand",
+}
+
+# The right recommendation for each kind of planted Anomaly other than a stockout risk.
+_RECOMMENDATIONS: dict[AnomalyKind, str] = {
+    AnomalyKind.SALES_DROP: "an alert to the regional manager to find out what kept shoppers away "
+    "at this Sales Channel; no Reorder",
+    AnomalyKind.SALES_SPIKE: "an alert to the merchandiser to check the local price cut and keep an eye "
+    "on stock; no Reorder",
+    AnomalyKind.SLOW_MOVER: "an alert to the inventory planner to stop reordering the SKU at this "
+    "Sales Channel and consider a markdown or moving the stock; no Reorder",
 }
 
 
 def actual_cause(planted: PlantedAnomaly, open_reorder: int | None) -> str:
     """The planted cause in words, as the LLM judge is told it."""
     sold = ", ".join(str(u) for u in planted.units_sold)
+    what = f"of {planted.sku}" if planted.sku is not None else "of every SKU together"
     words = (
         f"{_CAUSES[planted.cause]}: from {planted.cause_starts_on.isoformat()} it sold {sold} units "
-        f"a day of {planted.sku} at {planted.sales_channel}."
+        f"a day {what} at {planted.sales_channel}."
     )
-    if open_reorder is not None:
+    if planted.kind is not AnomalyKind.STOCKOUT_RISK:
+        words += f" The right recommendation is {_RECOMMENDATIONS[planted.kind]}."
+    elif open_reorder is not None:
         words += (
             f" A Reorder of {open_reorder} units was already placed in the ERP before the Investigation, "
             "so the right recommendation is an alert, not another Reorder."

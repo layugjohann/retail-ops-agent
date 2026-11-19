@@ -12,7 +12,7 @@ from datetime import date, datetime, timedelta
 from pydantic_ai.models import Model
 
 from retail_ops_agent.action_policy import (
-    ALERT_RECIPIENT,
+    ALERT_RECIPIENTS,
     AUTO_APPROVER,
     DEFAULT_AUTO_APPROVAL_LIMIT,
     QUEUE_RULES,
@@ -21,7 +21,7 @@ from retail_ops_agent.action_policy import (
     decide,
 )
 from retail_ops_agent.analyst import Investigation, investigate
-from retail_ops_agent.anomalies import Anomaly, detect_stockout_risks
+from retail_ops_agent.anomalies import Anomaly, detect_anomalies
 from retail_ops_agent.approval_queue import ApprovalQueue, ApprovalStatus, QueuedReorder
 from retail_ops_agent.audit_log import AuditAction, AuditEntry, AuditLog, UndoOperation, UndoRecipe
 from retail_ops_agent.bi_store import BiStore
@@ -127,10 +127,14 @@ class OpsDay:
         becomes Superseded and leaves the BI data, whatever its own status was. Earlier Uploads
         superseded before they were processed never go through Intake.
 
-        Deterministic statistics then flag the day's new Anomalies in the accepted data. The Analyst
-        agent investigates each with read-only tools, the Ops agent proposes an Action from the
-        Investigation, and the Action policy, not the model, sets its Tier. A Tier 1 alert is posted
-        through the Notifier and recorded in the Audit Log. A Reorder is Tier 2: it is always for the
+        Deterministic statistics then flag the day's new Anomalies in the accepted data: stockout
+        risks, sales drops at one Sales Channel, sales spikes and slow movers. A drop or spike every
+        Sales Channel shares is not flagged at any one of them. The Analyst agent investigates each
+        Anomaly with read-only tools, the Ops agent proposes an Action from the Investigation, and the
+        Action policy, not the model, sets its Tier. A Tier 1 alert is posted through the Notifier to
+        whoever the rules name for the kind of Anomaly and recorded in the Audit Log. Only a stockout
+        risk can lead to a Reorder; one proposed for any other kind is posted as an alert instead.
+        A Reorder is Tier 2: it is always for the
         Investigation's SKU and Sales Channel, its cost comes from the ERP's unit cost, and it waits in
         the Approval Queue unless that cost is under the Auto-approval Limit, in which case it is
         approved by rule, placed in the ERP and recorded in the Audit Log.
@@ -192,10 +196,16 @@ class OpsDay:
                 model=self._models.analyst,
                 investigated_at=self._clock.now(),
             )
-            sku = skus[anomaly.sku]
+            sku = skus.get(anomaly.sku) if anomaly.sku is not None else None
             proposal = propose_action(investigation, sku, self._models.ops)
-            cost = _cost(sku, proposal.quantity) if proposal.kind is ProposedActionKind.REORDER else None
-            decision = decide(proposal, cost=cost, auto_approval_limit=self._auto_approval_limit)
+            cost = (
+                _cost(sku, proposal.quantity)
+                if sku is not None and proposal.kind is ProposedActionKind.REORDER
+                else None
+            )
+            decision = decide(
+                proposal, anomaly_kind=anomaly.kind, cost=cost, auto_approval_limit=self._auto_approval_limit
+            )
             # Recorded only once both agents have answered, so an Anomaly whose Investigation
             # failed (a model outage or rate limit) is still investigated when the Ops Day is rerun.
             self._bi.record_anomaly(anomaly)
@@ -203,7 +213,8 @@ class OpsDay:
             investigations.append(investigation)
             if decision.runs_on_its_own:
                 entries.append(self._post_alert(investigation, proposal, decision))
-            elif proposal.kind is ProposedActionKind.REORDER:
+            elif decision.action is AuditAction.REORDER:
+                sku = _required(sku)
                 earlier = self._queue.pending_for(investigation.anomaly.sales_channel, sku.code)
                 item = self._queue_reorder(investigation, sku, proposal)
                 if earlier is not None:
@@ -407,15 +418,16 @@ class OpsDay:
         """The day's Anomalies not already flagged and investigated."""
         skus = {s.code: s for s in self._erp.list_skus()}
         known = self._bi.anomaly_ids()
-        return [a for a in detect_stockout_risks(self._bi, day, skus) if a.anomaly_id not in known]
+        return [a for a in detect_anomalies(self._bi, day, skus) if a.anomaly_id not in known]
 
     def _post_alert(
         self, investigation: Investigation, proposal: ActionProposal, decision: PolicyDecision
     ) -> AuditEntry:
+        recipient = ALERT_RECIPIENTS[investigation.anomaly.kind]
         self._notifier.send(
             Notification(
                 sent_at=self._clock.now(),
-                recipient=ALERT_RECIPIENT,
+                recipient=recipient,
                 subject=proposal.subject,
                 body=proposal.body,
             )
@@ -425,7 +437,7 @@ class OpsDay:
             action=decision.action,
             triggered_by=f"{investigation.anomaly.summary} ({investigation.investigation_id})",
             taken_by=OPS_AGENT,
-            summary=f"Alerted {ALERT_RECIPIENT}: {proposal.subject}",
+            summary=f"Alerted {recipient}: {proposal.subject}",
             upload_id=None,
             defect=None,
             investigation_id=investigation.investigation_id,
