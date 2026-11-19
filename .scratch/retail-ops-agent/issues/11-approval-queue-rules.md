@@ -5,7 +5,7 @@
 **Blocked by:** 10
 **Stacked on:** issue/10-reorders-approval-queue
 
-**Status:** awaiting-merge
+**Status:** done
 **Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/10
 
 - [ ] At most one pending Reorder per SKU and Sales Channel

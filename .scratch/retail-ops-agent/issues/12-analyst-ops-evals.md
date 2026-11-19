@@ -5,7 +5,7 @@
 **Blocked by:** 07, 10
 **Stacked on:** issue/11-approval-queue-rules
 
-**Status:** awaiting-merge
+**Status:** done
 **Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/11
 
 - [ ] Analyst grader: stated cause matches the planted cause

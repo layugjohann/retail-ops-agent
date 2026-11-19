@@ -4,7 +4,7 @@
 
 **Blocked by:** 08, 09
 
-**Status:** awaiting-merge
+**Status:** done
 **Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/9
 
 - [ ] A Reorder never reaches the ERP without Approval or the Auto-approval Limit (tested, including with a scripted model that tries to bypass it)
