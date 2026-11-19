@@ -174,7 +174,8 @@ class OpsDay:
         from the Approval Queue, which is recorded in the Audit Log; and its Reorders already placed
         in the ERP are flagged for a person, never cancelled automatically. An Anomaly whose
         Investigation concluded Data Problem is not re-checked: its Uploads already went back to
-        Intake and no Action was taken on it.
+        Intake and no Action was taken on it. A Superseded Upload whose replacement is Quarantined
+        leaves no data to re-check against, so the Anomalies built on it are left as they are.
 
         An Investigation can instead conclude Data Problem: the Anomaly was caused by a Defect that
         validation missed, such as quantities reported in cases instead of units. Then no Action is
@@ -583,6 +584,9 @@ class OpsDay:
         longer hold: undo their Tier 1 Actions, withdraw their pending Reorders and flag their placed
         Reorders for a person."""
         rechecked = _Rechecked(cleared=[], entries=[], withdrawn=[], flagged=[])
+        # A replacement that was Quarantined left no data to re-check against: an Anomaly missing
+        # from what is left has not been shown not to hold, so only loaded replacements count.
+        superseded = [(e, later) for e, later in superseded if self._bi.status(later.upload_id) in _LOADED]
         if not superseded:
             return rechecked
         skus = {s.code: s for s in self._erp.list_skus()}

@@ -256,3 +256,34 @@ def test_a_resubmission_at_another_sales_channel_leaves_a_stockout_risk_alone(
     assert outcome.cleared_anomalies == []
     [alert] = _entries(run.ops_day, AuditAction.ALERT)
     assert alert.undone_by is None
+
+
+def test_a_quarantined_resubmission_leaves_the_anomaly_and_its_alert_alone(
+    catalog: Catalog, tmp_path: Path, restock_counted: GeneratedUploads
+) -> None:
+    run = Run(catalog, tmp_path, ops=scripted_ops_model(), auto_approval_limit=0)
+    run.run_to_flagged_day(restock_counted)
+    # The resubmission drops the on-hand column, so it is Quarantined and replaces the first Upload's
+    # rows with nothing: there is no data to re-check the Anomaly against.
+    rows = [
+        line.split(",")
+        for line in restock_counted.content(SALES_CHANNEL, FLAGGED_ON, UploadKind.INVENTORY).splitlines()
+    ]
+    dropped = rows[0].index("on_hand")
+    broken = "\n".join(",".join(c for i, c in enumerate(row) if i != dropped) for row in rows) + "\n"
+    run.ops_day.advance_time(timedelta(hours=1))
+    run.ops_day.submit_upload(
+        sales_channel=SALES_CHANNEL,
+        day=FLAGGED_ON,
+        kind=UploadKind.INVENTORY,
+        content=broken,
+        uploader="manager.st02@cobalthome.example",
+    )
+
+    outcome = run.ops_day.run_ops_day(FLAGGED_ON)
+
+    second = f"{SALES_CHANNEL}-{FLAGGED_ON.isoformat()}-inventory-002"
+    assert {u.upload_id: u.status for u in run.ops_day.upload_statuses()}[second] is UploadStatus.QUARANTINED
+    assert outcome.cleared_anomalies == [] and run.ops_day.cleared_anomalies() == []
+    [alert] = _entries(run.ops_day, AuditAction.ALERT)
+    assert alert.undone_by is None
