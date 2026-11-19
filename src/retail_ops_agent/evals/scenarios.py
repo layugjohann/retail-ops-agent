@@ -72,11 +72,26 @@ class AfterRunStep(BaseModel):
         return self
 
 
+class SupersedeEffect(StrEnum):
+    """What a planted resubmission should do to the Action taken on a planted Anomaly."""
+
+    # The Anomaly still holds against the resubmission, and its Action stands.
+    STANDS = "stands"
+    # The Anomaly is cleared and its alert undone through the Audit Log.
+    UNDONE = "undone"
+    # The Anomaly is cleared and its pending Reorder withdrawn from the Approval Queue.
+    WITHDRAWN = "withdrawn"
+    # The Anomaly is cleared and its Reorder, already placed, is flagged for a person and still placed
+    # in the ERP.
+    FLAGGED = "flagged"
+
+
 class ExpectedAction(BaseModel):
     """The Action expected for the Anomaly planted at the Sales Channel, once its Investigation is done.
 
     tier is the Action Tier the fixed rules give that Action. approval is how a Reorder ends the
-    Scenario in the Approval Queue; an alert has none.
+    Scenario in the Approval Queue; an alert has none. after_supersede, for a Scenario that resends
+    an Upload the Anomaly was built on, is what that resubmission should do to the Action.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -86,11 +101,22 @@ class ExpectedAction(BaseModel):
     action: ProposedActionKind
     tier: ActionTier
     approval: ApprovalStatus | None = None
+    after_supersede: SupersedeEffect | None = None
 
     @model_validator(mode="after")
     def _approval_only_for_reorders(self) -> ExpectedAction:
         if (self.action is ProposedActionKind.REORDER) != (self.approval is not None):
             raise ValueError("approval is given for a Reorder, and only for a Reorder")
+        effect = self.after_supersede
+        if effect is SupersedeEffect.UNDONE and self.action is not ProposedActionKind.ALERT:
+            raise ValueError("only an alert is undone after a Supersede")
+        if (effect is SupersedeEffect.WITHDRAWN) != (self.approval is ApprovalStatus.WITHDRAWN):
+            raise ValueError("a Reorder ends withdrawn exactly when a Supersede withdraws it")
+        if effect is SupersedeEffect.FLAGGED and self.approval not in (
+            ApprovalStatus.APPROVED,
+            ApprovalStatus.AUTO_APPROVED,
+        ):
+            raise ValueError("only a placed Reorder is flagged after a Supersede")
         return self
 
 
@@ -189,6 +215,8 @@ class Scenario(BaseModel):
         for channel in channels:
             if (channel, AnomalyKind.STOCKOUT_RISK) not in planted:
                 raise ValueError(f"an open Reorder at {channel}, where no stockout risk is planted")
+        if any(e.after_supersede for e in self.expected_actions) and not self.planted.resubmissions:
+            raise ValueError("after_supersede is given, but no resubmission is planted")
         lookalikes = [p.kind for p in self.planted.lookalikes]
         if len(lookalikes) != len(set(lookalikes)):
             raise ValueError("more than one lookalike of a kind is planted")

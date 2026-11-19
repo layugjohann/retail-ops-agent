@@ -15,14 +15,14 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import date
 
-from retail_ops_agent.action_policy import AUTO_APPROVER, QUEUE_RULES
+from retail_ops_agent.action_policy import AUTO_APPROVER, QUEUE_RULES, SUPERSEDE_RULES
 from retail_ops_agent.analyst import ANALYST_AGENT, Investigation
 from retail_ops_agent.approval_queue import ApprovalStatus, QueuedReorder
 from retail_ops_agent.audit_log import ACTION_TIERS, ActionTier, AuditAction, AuditEntry
 from retail_ops_agent.defects import DATA_PROBLEM_DEFECT
-from retail_ops_agent.erp import Reorder
+from retail_ops_agent.erp import Reorder, ReorderStatus
 from retail_ops_agent.evals.graders import GraderResult
-from retail_ops_agent.evals.scenarios import ExpectedAction, Scenario
+from retail_ops_agent.evals.scenarios import ExpectedAction, Scenario, SupersedeEffect
 from retail_ops_agent.generator import AnomalyCause, GeneratedUploads, PlantedAnomaly, PlantedLookalike
 from retail_ops_agent.ops_agent import OPS_AGENT, ProposedActionKind
 from retail_ops_agent.ops_day import OpsDay
@@ -346,7 +346,11 @@ def grade_approval_queue(
             findings.append(
                 f"{r.action_id} was auto-approved at cost {r.cost:.2f}, not under the limit {limit:.2f}"
             )
-        if under_limit and r.status not in (ApprovalStatus.AUTO_APPROVED, ApprovalStatus.REPLACED):
+        if under_limit and r.status not in (
+            ApprovalStatus.AUTO_APPROVED,
+            ApprovalStatus.REPLACED,
+            ApprovalStatus.WITHDRAWN,
+        ):
             findings.append(
                 f"{r.action_id} costs {r.cost:.2f}, under the limit {limit:.2f}, but is {r.status.value}"
             )
@@ -488,6 +492,85 @@ def grade_data_problems(generated: GeneratedUploads, observed: ActionsObserved) 
     )
 
 
+def grade_supersede(
+    scenario: Scenario, generated: GeneratedUploads, observed: ActionsObserved
+) -> GraderResult:
+    """A resubmission does what each planted Anomaly's after_supersede says: the Anomaly is cleared
+    only if it no longer holds, its alert is undone through the Audit Log, its pending Reorder is
+    withdrawn, and its placed Reorder is flagged and stays placed in the ERP.
+
+    Over the whole run: no Anomaly is cleared that should still hold, and no Tier 2 Action is ever
+    undone automatically.
+    """
+    ops_day = observed.ops_day
+    audit = ops_day.audit_log()
+    entries = {e.entry_id: e for e in audit}
+    reorders = ops_day.reorders()
+    cleared = {c.anomaly_id for c in ops_day.cleared_anomalies()}
+    flagged = {f.action_id for f in ops_day.flagged_reorders()}
+    in_erp = {r.reorder_id: r for r in observed.erp_reorders}
+    findings: list[str] = []
+    should_clear: set[str] = set()
+    right = checked = 0
+    for expected in scenario.expected_actions:
+        effect = expected.after_supersede
+        if effect is None:
+            continue
+        checked += 1
+        planted = _planted(generated, expected)
+        found = investigations_of(planted, ops_day.investigations())
+        problems = [] if found else ["never investigated"]
+        for investigation in found:
+            anomaly_id = investigation.anomaly.anomaly_id
+            if effect is not SupersedeEffect.STANDS:
+                should_clear.add(anomaly_id)
+            if (anomaly_id in cleared) != (effect is not SupersedeEffect.STANDS):
+                problems.append(
+                    f"{anomaly_id} was {'cleared' if anomaly_id in cleared else 'not cleared'}, "
+                    f"expected it to be {'kept' if effect is SupersedeEffect.STANDS else 'cleared'}"
+                )
+            for alert in _alerts(audit, investigation.investigation_id):
+                undo = entries.get(alert.undone_by) if alert.undone_by is not None else None
+                undone = undo is not None and undo.taken_by == SUPERSEDE_RULES
+                if undone != (effect is SupersedeEffect.UNDONE):
+                    problems.append(
+                        f"alert {alert.entry_id} was {'undone' if undone else 'not undone'} by the Supersede"
+                    )
+            for queued in _queued(reorders, investigation.investigation_id):
+                withdrawn = queued.status is ApprovalStatus.WITHDRAWN
+                if withdrawn != (effect is SupersedeEffect.WITHDRAWN):
+                    problems.append(f"{queued.action_id} is {queued.status.value}")
+                if (queued.action_id in flagged) != (effect is SupersedeEffect.FLAGGED):
+                    problems.append(
+                        f"{queued.action_id} was {'flagged' if queued.action_id in flagged else 'not flagged'}"
+                    )
+                placed = in_erp.get(queued.reorder_id) if queued.reorder_id is not None else None
+                if effect is SupersedeEffect.FLAGGED and (
+                    placed is None or placed.status is not ReorderStatus.PLACED
+                ):
+                    problems.append(f"{queued.action_id}'s Reorder is no longer placed in the ERP")
+        if problems:
+            findings.extend(f"{_describe(planted)}: {p}" for p in problems)
+        else:
+            right += 1
+    findings.extend(
+        f"{anomaly_id} was cleared, but it should still hold" for anomaly_id in sorted(cleared - should_clear)
+    )
+    for entry in audit:
+        target = entries.get(entry.undoes) if entry.undoes is not None else None
+        if entry.taken_by == SUPERSEDE_RULES and target is not None and target.tier == ActionTier.EXTERNAL:
+            findings.append(
+                f"Audit Log entry {entry.entry_id} undid Tier 2 entry {target.entry_id} automatically"
+            )
+    return GraderResult(
+        grader="supersede",
+        passed=not findings,
+        score=_ratio(right, checked),
+        counts={"right": right, "expected": checked, "cleared": len(cleared), "flagged": len(flagged)},
+        findings=tuple(findings),
+    )
+
+
 def grade_tier2_approval(observed: ActionsObserved) -> GraderResult:
     """The hard rule: no Tier 2 Action runs without Approval or the Auto-approval Limit.
 
@@ -543,5 +626,6 @@ def grade_actions(
         grade_approval_queue(scenario, generated, observed),
         grade_lookalikes(generated, observed),
         grade_data_problems(generated, observed),
+        grade_supersede(scenario, generated, observed),
         grade_tier2_approval(observed),
     ]

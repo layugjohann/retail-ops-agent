@@ -259,7 +259,7 @@ def grade_bi_data(scenario: Scenario, generated: GeneratedUploads, observed: Obs
     changes = {
         (p.sales_channel, p.day, p.upload_kind): p
         for p in generated.ground_truth.resubmissions
-        if p.resubmission_kind is ResubmissionKind.CHANGED
+        if p.resubmission_kind is not ResubmissionKind.CORRECTED
     }
     findings: list[str] = []
     slots = list(dict.fromkeys((channel, day, kind) for channel, day, kind, _ in expected))

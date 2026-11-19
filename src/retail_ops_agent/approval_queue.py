@@ -26,6 +26,9 @@ class ApprovalStatus(StrEnum):
     REPLACED = "replaced"
     # Nobody decided within the Expiry; it will never run.
     EXPIRED = "expired"
+    # The Anomaly it answered no longer holds, because an Upload it was built on was Superseded; it
+    # will never run.
+    WITHDRAWN = "withdrawn"
 
 
 class QueuedReorder(BaseModel):
@@ -57,6 +60,8 @@ class QueuedReorder(BaseModel):
     audit_entry_id: int | None = None
     # The Action that replaced it, once a newer Investigation of the same SKU and Sales Channel did.
     replaced_by: str | None = None
+    # Why it was withdrawn from the Approval Queue, once it was.
+    withdrawn_because: str | None = None
 
     @computed_field
     @property
