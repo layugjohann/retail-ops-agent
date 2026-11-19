@@ -5,7 +5,7 @@
 **Blocked by:** 01
 **Stacked on:** issue/07-eval-harness-intake-evals
 
-**Status:** awaiting-merge
+**Status:** done
 **Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/7
 
 - [ ] The MCP server exposes: read SKUs, stock levels and Suppliers; place, read and cancel Reorders

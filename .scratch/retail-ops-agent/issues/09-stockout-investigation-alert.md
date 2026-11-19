@@ -5,7 +5,7 @@
 **Blocked by:** 02, 03
 **Stacked on:** issue/08-erp-mcp-server
 
-**Status:** awaiting-merge
+**Status:** done
 **Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/8
 
 - [ ] Stockout risk detection is deterministic and needs no model

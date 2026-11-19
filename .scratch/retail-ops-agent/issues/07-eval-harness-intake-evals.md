@@ -4,7 +4,7 @@
 
 **Blocked by:** 04, 06
 
-**Status:** awaiting-merge
+**Status:** done
 **Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/6
 
 - [ ] Scenario format: id, tags, seed, day range, planted items, expected outcomes
