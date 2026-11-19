@@ -11,11 +11,27 @@ for the spec.
 ```sh
 uv sync
 make check       # ruff lint + format check, pyright, pytest
-make dashboard   # Streamlit dashboard over a seeded sandbox
+make dashboard   # Streamlit dashboard; opens in Replay Mode
 make evals       # Golden Scenarios against real free-tier models; see evals/README.md
+make record      # record Ops Days for Replay Mode
+make deploy      # interactive wizard: deploy the dashboard to Streamlit Community Cloud
 ```
 
 Model keys are optional and free-tier only; see `.env.example`.
+
+## Replay Mode
+
+The dashboard opens in Replay Mode: it plays back Recordings of real Ops Days with no model, no key
+and no network call, so a Visitor can step through each Ops Day stage by stage (Intake, Load,
+Detection, Investigation, Actions). The Recordings live in `src/retail_ops_agent/recordings/` and
+include a Defect day (Safe Fixes, a Quarantine and a corrected resend), a stockout risk with a
+Reorder under the Auto-approval Limit, and a stockout risk whose Reorder waits for and gets
+Approval. Each Recording names the model its agents ran on.
+
+`make record` runs each Recording's seeded sandbox through the Ops Day boundary again and rewrites
+its JSON. With a free-tier key in `.env.local` the agents use that model, paced for its rate limit;
+without one, the offline scripted model stands in. The sidebar switches to Live Mode, a seeded
+sandbox run through the Ops Day boundary.
 
 ## The ERP MCP server
 

@@ -1,0 +1,694 @@
+{
+ "recording_id": "01-defect-day",
+ "title": "Defect day: Safe Fixes, a Quarantine and a corrected resend",
+ "description": "ST02 sends sales with a renamed column, which Intake fixes safely. ST03 sends sales with a missing column, which is Quarantined with a message to its Uploader, who resends a corrected Upload that Supersedes it the next Ops Day. The Online Shop's Stock Snapshot arrives with the wrong delimiter.",
+ "model": "offline scripted model (no key set)",
+ "seed": 7,
+ "auto_approval_limit": 150.0,
+ "ops_days": [
+  {
+   "outcome": {
+    "day": "2026-11-01",
+    "uploads": [
+     {
+      "upload_id": "ONLINE-2026-11-01-inventory-001",
+      "sales_channel": "ONLINE",
+      "day": "2026-11-01",
+      "kind": "inventory",
+      "uploader": "ecommerce@cobalthome.example",
+      "status": "accepted",
+      "processed_at": "2026-11-01T21:00:00",
+      "defects": [],
+      "superseded_by": null,
+      "history": [
+       {
+        "changed_at": "2026-11-01T21:00:00",
+        "status": "accepted"
+       }
+      ]
+     },
+     {
+      "upload_id": "ONLINE-2026-11-01-sales-001",
+      "sales_channel": "ONLINE",
+      "day": "2026-11-01",
+      "kind": "sales",
+      "uploader": "ecommerce@cobalthome.example",
+      "status": "accepted",
+      "processed_at": "2026-11-01T21:00:00",
+      "defects": [],
+      "superseded_by": null,
+      "history": [
+       {
+        "changed_at": "2026-11-01T21:00:00",
+        "status": "accepted"
+       }
+      ]
+     },
+     {
+      "upload_id": "ST02-2026-11-01-inventory-001",
+      "sales_channel": "ST02",
+      "day": "2026-11-01",
+      "kind": "inventory",
+      "uploader": "manager.st02@cobalthome.example",
+      "status": "accepted",
+      "processed_at": "2026-11-01T21:00:00",
+      "defects": [],
+      "superseded_by": null,
+      "history": [
+       {
+        "changed_at": "2026-11-01T21:00:00",
+        "status": "accepted"
+       }
+      ]
+     },
+     {
+      "upload_id": "ST02-2026-11-01-sales-001",
+      "sales_channel": "ST02",
+      "day": "2026-11-01",
+      "kind": "sales",
+      "uploader": "manager.st02@cobalthome.example",
+      "status": "accepted",
+      "processed_at": "2026-11-01T21:00:00",
+      "defects": [],
+      "superseded_by": null,
+      "history": [
+       {
+        "changed_at": "2026-11-01T21:00:00",
+        "status": "accepted"
+       }
+      ]
+     },
+     {
+      "upload_id": "ST03-2026-11-01-inventory-001",
+      "sales_channel": "ST03",
+      "day": "2026-11-01",
+      "kind": "inventory",
+      "uploader": "manager.st03@cobalthome.example",
+      "status": "accepted",
+      "processed_at": "2026-11-01T21:00:00",
+      "defects": [],
+      "superseded_by": null,
+      "history": [
+       {
+        "changed_at": "2026-11-01T21:00:00",
+        "status": "accepted"
+       }
+      ]
+     },
+     {
+      "upload_id": "ST03-2026-11-01-sales-001",
+      "sales_channel": "ST03",
+      "day": "2026-11-01",
+      "kind": "sales",
+      "uploader": "manager.st03@cobalthome.example",
+      "status": "accepted",
+      "processed_at": "2026-11-01T21:00:00",
+      "defects": [],
+      "superseded_by": null,
+      "history": [
+       {
+        "changed_at": "2026-11-01T21:00:00",
+        "status": "accepted"
+       }
+      ]
+     }
+    ],
+    "audit_entries": [],
+    "uploader_messages": [],
+    "anomalies": [],
+    "investigations": [],
+    "reorders": [],
+    "approval_queue": [],
+    "cleared_anomalies": [],
+    "withdrawn_reorders": [],
+    "flagged_reorders": []
+   },
+   "sales": [
+    {
+     "day": "2026-11-01",
+     "sales_channel": "ONLINE",
+     "sales_channel_name": "Online Shop",
+     "quantity_sold": 483,
+     "net_sales": 17317.32
+    },
+    {
+     "day": "2026-11-01",
+     "sales_channel": "ST02",
+     "sales_channel_name": "Northgate Store",
+     "quantity_sold": 357,
+     "net_sales": 12342.3
+    },
+    {
+     "day": "2026-11-01",
+     "sales_channel": "ST03",
+     "sales_channel_name": "Westfield Store",
+     "quantity_sold": 195,
+     "net_sales": 7159.47
+    }
+   ],
+   "inventory": [
+    {
+     "day": "2026-11-01",
+     "sales_channel": "ONLINE",
+     "sales_channel_name": "Online Shop",
+     "skus_in_stock": 300,
+     "on_hand": 20817
+    },
+    {
+     "day": "2026-11-01",
+     "sales_channel": "ST02",
+     "sales_channel_name": "Northgate Store",
+     "skus_in_stock": 300,
+     "on_hand": 16176
+    },
+    {
+     "day": "2026-11-01",
+     "sales_channel": "ST03",
+     "sales_channel_name": "Westfield Store",
+     "skus_in_stock": 300,
+     "on_hand": 9927
+    }
+   ],
+   "decisions": []
+  },
+  {
+   "outcome": {
+    "day": "2026-11-02",
+    "uploads": [
+     {
+      "upload_id": "ONLINE-2026-11-02-inventory-001",
+      "sales_channel": "ONLINE",
+      "day": "2026-11-02",
+      "kind": "inventory",
+      "uploader": "ecommerce@cobalthome.example",
+      "status": "accepted",
+      "processed_at": "2026-11-02T21:00:00",
+      "defects": [],
+      "superseded_by": null,
+      "history": [
+       {
+        "changed_at": "2026-11-02T21:00:00",
+        "status": "accepted"
+       }
+      ]
+     },
+     {
+      "upload_id": "ONLINE-2026-11-02-sales-001",
+      "sales_channel": "ONLINE",
+      "day": "2026-11-02",
+      "kind": "sales",
+      "uploader": "ecommerce@cobalthome.example",
+      "status": "accepted",
+      "processed_at": "2026-11-02T21:00:00",
+      "defects": [],
+      "superseded_by": null,
+      "history": [
+       {
+        "changed_at": "2026-11-02T21:00:00",
+        "status": "accepted"
+       }
+      ]
+     },
+     {
+      "upload_id": "ST02-2026-11-02-inventory-001",
+      "sales_channel": "ST02",
+      "day": "2026-11-02",
+      "kind": "inventory",
+      "uploader": "manager.st02@cobalthome.example",
+      "status": "accepted",
+      "processed_at": "2026-11-02T21:00:00",
+      "defects": [],
+      "superseded_by": null,
+      "history": [
+       {
+        "changed_at": "2026-11-02T21:00:00",
+        "status": "accepted"
+       }
+      ]
+     },
+     {
+      "upload_id": "ST02-2026-11-02-sales-001",
+      "sales_channel": "ST02",
+      "day": "2026-11-02",
+      "kind": "sales",
+      "uploader": "manager.st02@cobalthome.example",
+      "status": "safe_fixed",
+      "processed_at": "2026-11-02T21:00:00",
+      "defects": [
+       {
+        "kind": "renamed_column",
+        "row": 1,
+        "column": "store_code",
+        "detail": "column 'store_id' was read as store_code"
+       }
+      ],
+      "superseded_by": null,
+      "history": [
+       {
+        "changed_at": "2026-11-02T21:00:00",
+        "status": "safe_fixed"
+       }
+      ]
+     },
+     {
+      "upload_id": "ST03-2026-11-02-inventory-001",
+      "sales_channel": "ST03",
+      "day": "2026-11-02",
+      "kind": "inventory",
+      "uploader": "manager.st03@cobalthome.example",
+      "status": "accepted",
+      "processed_at": "2026-11-02T21:00:00",
+      "defects": [],
+      "superseded_by": null,
+      "history": [
+       {
+        "changed_at": "2026-11-02T21:00:00",
+        "status": "accepted"
+       }
+      ]
+     },
+     {
+      "upload_id": "ST03-2026-11-02-sales-001",
+      "sales_channel": "ST03",
+      "day": "2026-11-02",
+      "kind": "sales",
+      "uploader": "manager.st03@cobalthome.example",
+      "status": "quarantined",
+      "processed_at": "2026-11-02T21:00:00",
+      "defects": [
+       {
+        "kind": "missing_column",
+        "row": null,
+        "column": "sku",
+        "detail": "column sku is missing"
+       }
+      ],
+      "superseded_by": null,
+      "history": [
+       {
+        "changed_at": "2026-11-02T21:00:00",
+        "status": "quarantined"
+       }
+      ]
+     }
+    ],
+    "audit_entries": [
+     {
+      "entry_id": 1,
+      "recorded_at": "2026-11-02T21:00:00",
+      "action": "safe_fix",
+      "tier": 1,
+      "triggered_by": "Defect renamed_column in Upload ST02-2026-11-02-sales-001 (the header (row 1), column store_code)",
+      "taken_by": "Intake agent",
+      "summary": "Safe Fix on Upload ST02-2026-11-02-sales-001: column 'store_id' was read as store_code",
+      "upload_id": "ST02-2026-11-02-sales-001",
+      "defect": {
+       "kind": "renamed_column",
+       "row": 1,
+       "column": "store_code",
+       "detail": "column 'store_id' was read as store_code"
+      },
+      "undo": {
+       "operation": "restore_original_upload",
+       "upload_id": "ST02-2026-11-02-sales-001",
+       "entry_id": null,
+       "reorder_id": null,
+       "description": "Take Upload ST02-2026-11-02-sales-001's rows out of the BI data and hold the Upload, as it arrived, in Quarantine."
+      },
+      "investigation_id": null,
+      "undoes": null,
+      "undone_by": null
+     },
+     {
+      "entry_id": 2,
+      "recorded_at": "2026-11-02T21:00:00",
+      "action": "quarantine",
+      "tier": 1,
+      "triggered_by": "Defects without a Safe Fix in Upload ST03-2026-11-02-sales-001: missing_column",
+      "taken_by": "Intake agent",
+      "summary": "Quarantined Upload ST03-2026-11-02-sales-001 with 1 Defect (missing_column) and messaged manager.st03@cobalthome.example",
+      "upload_id": "ST03-2026-11-02-sales-001",
+      "defect": {
+       "kind": "missing_column",
+       "row": null,
+       "column": "sku",
+       "detail": "column sku is missing"
+      },
+      "undo": {
+       "operation": "release_upload",
+       "upload_id": "ST03-2026-11-02-sales-001",
+       "entry_id": null,
+       "reorder_id": null,
+       "description": "Release Upload ST03-2026-11-02-sales-001 from Quarantine: load the rows that passed every check into the BI data and accept it; rows with Defects stay out."
+      },
+      "investigation_id": null,
+      "undoes": null,
+      "undone_by": null
+     }
+    ],
+    "uploader_messages": [
+     {
+      "upload_id": "ST03-2026-11-02-sales-001",
+      "sent_at": "2026-11-02T21:00:00",
+      "recipient": "manager.st03@cobalthome.example",
+      "subject": "Upload ST03-2026-11-02-sales-001 is Quarantined: please correct it and resend",
+      "body": "Your sales Upload for ST03 on 2026-11-02 (ST03-2026-11-02-sales-001) is in Quarantine, so none of its rows are in the BI data yet.\n\nPlease correct the following and resend the whole file for the same day; it will replace this one.\n\n1. Missing column at column sku: column sku is missing. What to do: Add this column to the header and fill it in on every row, as in your usual export."
+     }
+    ],
+    "anomalies": [],
+    "investigations": [],
+    "reorders": [],
+    "approval_queue": [],
+    "cleared_anomalies": [],
+    "withdrawn_reorders": [],
+    "flagged_reorders": []
+   },
+   "sales": [
+    {
+     "day": "2026-11-02",
+     "sales_channel": "ONLINE",
+     "sales_channel_name": "Online Shop",
+     "quantity_sold": 449,
+     "net_sales": 15305.92
+    },
+    {
+     "day": "2026-11-02",
+     "sales_channel": "ST02",
+     "sales_channel_name": "Northgate Store",
+     "quantity_sold": 233,
+     "net_sales": 8272.05
+    }
+   ],
+   "inventory": [
+    {
+     "day": "2026-11-02",
+     "sales_channel": "ONLINE",
+     "sales_channel_name": "Online Shop",
+     "skus_in_stock": 300,
+     "on_hand": 20368
+    },
+    {
+     "day": "2026-11-02",
+     "sales_channel": "ST02",
+     "sales_channel_name": "Northgate Store",
+     "skus_in_stock": 300,
+     "on_hand": 15943
+    },
+    {
+     "day": "2026-11-02",
+     "sales_channel": "ST03",
+     "sales_channel_name": "Westfield Store",
+     "skus_in_stock": 300,
+     "on_hand": 9787
+    }
+   ],
+   "decisions": []
+  },
+  {
+   "outcome": {
+    "day": "2026-11-03",
+    "uploads": [
+     {
+      "upload_id": "ST03-2026-11-02-sales-002",
+      "sales_channel": "ST03",
+      "day": "2026-11-02",
+      "kind": "sales",
+      "uploader": "manager.st03@cobalthome.example",
+      "status": "accepted",
+      "processed_at": "2026-11-03T21:00:00",
+      "defects": [],
+      "superseded_by": null,
+      "history": [
+       {
+        "changed_at": "2026-11-03T21:00:00",
+        "status": "accepted"
+       }
+      ]
+     },
+     {
+      "upload_id": "ST03-2026-11-02-sales-001",
+      "sales_channel": "ST03",
+      "day": "2026-11-02",
+      "kind": "sales",
+      "uploader": "manager.st03@cobalthome.example",
+      "status": "superseded",
+      "processed_at": "2026-11-02T21:00:00",
+      "defects": [
+       {
+        "kind": "missing_column",
+        "row": null,
+        "column": "sku",
+        "detail": "column sku is missing"
+       }
+      ],
+      "superseded_by": "ST03-2026-11-02-sales-002",
+      "history": [
+       {
+        "changed_at": "2026-11-02T21:00:00",
+        "status": "quarantined"
+       },
+       {
+        "changed_at": "2026-11-03T21:00:00",
+        "status": "superseded"
+       }
+      ]
+     },
+     {
+      "upload_id": "ONLINE-2026-11-03-inventory-001",
+      "sales_channel": "ONLINE",
+      "day": "2026-11-03",
+      "kind": "inventory",
+      "uploader": "ecommerce@cobalthome.example",
+      "status": "safe_fixed",
+      "processed_at": "2026-11-03T21:00:00",
+      "defects": [
+       {
+        "kind": "wrong_delimiter",
+        "row": null,
+        "column": null,
+        "detail": "values are separated by '\\t' instead of commas"
+       }
+      ],
+      "superseded_by": null,
+      "history": [
+       {
+        "changed_at": "2026-11-03T21:00:00",
+        "status": "safe_fixed"
+       }
+      ]
+     },
+     {
+      "upload_id": "ONLINE-2026-11-03-sales-001",
+      "sales_channel": "ONLINE",
+      "day": "2026-11-03",
+      "kind": "sales",
+      "uploader": "ecommerce@cobalthome.example",
+      "status": "accepted",
+      "processed_at": "2026-11-03T21:00:00",
+      "defects": [],
+      "superseded_by": null,
+      "history": [
+       {
+        "changed_at": "2026-11-03T21:00:00",
+        "status": "accepted"
+       }
+      ]
+     },
+     {
+      "upload_id": "ST02-2026-11-03-inventory-001",
+      "sales_channel": "ST02",
+      "day": "2026-11-03",
+      "kind": "inventory",
+      "uploader": "manager.st02@cobalthome.example",
+      "status": "accepted",
+      "processed_at": "2026-11-03T21:00:00",
+      "defects": [],
+      "superseded_by": null,
+      "history": [
+       {
+        "changed_at": "2026-11-03T21:00:00",
+        "status": "accepted"
+       }
+      ]
+     },
+     {
+      "upload_id": "ST02-2026-11-03-sales-001",
+      "sales_channel": "ST02",
+      "day": "2026-11-03",
+      "kind": "sales",
+      "uploader": "manager.st02@cobalthome.example",
+      "status": "accepted",
+      "processed_at": "2026-11-03T21:00:00",
+      "defects": [],
+      "superseded_by": null,
+      "history": [
+       {
+        "changed_at": "2026-11-03T21:00:00",
+        "status": "accepted"
+       }
+      ]
+     },
+     {
+      "upload_id": "ST03-2026-11-03-inventory-001",
+      "sales_channel": "ST03",
+      "day": "2026-11-03",
+      "kind": "inventory",
+      "uploader": "manager.st03@cobalthome.example",
+      "status": "accepted",
+      "processed_at": "2026-11-03T21:00:00",
+      "defects": [],
+      "superseded_by": null,
+      "history": [
+       {
+        "changed_at": "2026-11-03T21:00:00",
+        "status": "accepted"
+       }
+      ]
+     },
+     {
+      "upload_id": "ST03-2026-11-03-sales-001",
+      "sales_channel": "ST03",
+      "day": "2026-11-03",
+      "kind": "sales",
+      "uploader": "manager.st03@cobalthome.example",
+      "status": "accepted",
+      "processed_at": "2026-11-03T21:00:00",
+      "defects": [],
+      "superseded_by": null,
+      "history": [
+       {
+        "changed_at": "2026-11-03T21:00:00",
+        "status": "accepted"
+       }
+      ]
+     }
+    ],
+    "audit_entries": [
+     {
+      "entry_id": 3,
+      "recorded_at": "2026-11-03T21:00:00",
+      "action": "safe_fix",
+      "tier": 1,
+      "triggered_by": "Defect wrong_delimiter in Upload ONLINE-2026-11-03-inventory-001 (the whole file)",
+      "taken_by": "Intake agent",
+      "summary": "Safe Fix on Upload ONLINE-2026-11-03-inventory-001: values are separated by '\\t' instead of commas",
+      "upload_id": "ONLINE-2026-11-03-inventory-001",
+      "defect": {
+       "kind": "wrong_delimiter",
+       "row": null,
+       "column": null,
+       "detail": "values are separated by '\\t' instead of commas"
+      },
+      "undo": {
+       "operation": "restore_original_upload",
+       "upload_id": "ONLINE-2026-11-03-inventory-001",
+       "entry_id": null,
+       "reorder_id": null,
+       "description": "Take Upload ONLINE-2026-11-03-inventory-001's rows out of the BI data and hold the Upload, as it arrived, in Quarantine."
+      },
+      "investigation_id": null,
+      "undoes": null,
+      "undone_by": null
+     }
+    ],
+    "uploader_messages": [],
+    "anomalies": [],
+    "investigations": [],
+    "reorders": [],
+    "approval_queue": [],
+    "cleared_anomalies": [],
+    "withdrawn_reorders": [],
+    "flagged_reorders": []
+   },
+   "sales": [
+    {
+     "day": "2026-11-02",
+     "sales_channel": "ONLINE",
+     "sales_channel_name": "Online Shop",
+     "quantity_sold": 449,
+     "net_sales": 15305.92
+    },
+    {
+     "day": "2026-11-02",
+     "sales_channel": "ST02",
+     "sales_channel_name": "Northgate Store",
+     "quantity_sold": 233,
+     "net_sales": 8272.05
+    },
+    {
+     "day": "2026-11-02",
+     "sales_channel": "ST03",
+     "sales_channel_name": "Westfield Store",
+     "quantity_sold": 140,
+     "net_sales": 4441.65
+    },
+    {
+     "day": "2026-11-03",
+     "sales_channel": "ONLINE",
+     "sales_channel_name": "Online Shop",
+     "quantity_sold": 391,
+     "net_sales": 13256.86
+    },
+    {
+     "day": "2026-11-03",
+     "sales_channel": "ST02",
+     "sales_channel_name": "Northgate Store",
+     "quantity_sold": 261,
+     "net_sales": 9203.35
+    },
+    {
+     "day": "2026-11-03",
+     "sales_channel": "ST03",
+     "sales_channel_name": "Westfield Store",
+     "quantity_sold": 155,
+     "net_sales": 5585.3
+    }
+   ],
+   "inventory": [
+    {
+     "day": "2026-11-02",
+     "sales_channel": "ONLINE",
+     "sales_channel_name": "Online Shop",
+     "skus_in_stock": 300,
+     "on_hand": 20368
+    },
+    {
+     "day": "2026-11-02",
+     "sales_channel": "ST02",
+     "sales_channel_name": "Northgate Store",
+     "skus_in_stock": 300,
+     "on_hand": 15943
+    },
+    {
+     "day": "2026-11-02",
+     "sales_channel": "ST03",
+     "sales_channel_name": "Westfield Store",
+     "skus_in_stock": 300,
+     "on_hand": 9787
+    },
+    {
+     "day": "2026-11-03",
+     "sales_channel": "ONLINE",
+     "sales_channel_name": "Online Shop",
+     "skus_in_stock": 300,
+     "on_hand": 19977
+    },
+    {
+     "day": "2026-11-03",
+     "sales_channel": "ST02",
+     "sales_channel_name": "Northgate Store",
+     "skus_in_stock": 300,
+     "on_hand": 15682
+    },
+    {
+     "day": "2026-11-03",
+     "sales_channel": "ST03",
+     "sales_channel_name": "Westfield Store",
+     "skus_in_stock": 300,
+     "on_hand": 9632
+    }
+   ],
+   "decisions": []
+  }
+ ]
+}

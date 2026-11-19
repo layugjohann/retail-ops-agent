@@ -9,6 +9,12 @@ from streamlit.testing.v1 import AppTest
 APP = Path(__file__).resolve().parent.parent / "dashboard" / "app.py"
 
 
+def _live_app() -> AppTest:
+    """The dashboard switched from its default, Replay Mode, to Live Mode."""
+    app = AppTest.from_file(str(APP), default_timeout=120).run()
+    return app.radio(key="mode").set_value("Live Mode").run()
+
+
 @pytest.fixture
 def fresh_sandbox() -> None:
     """The sandbox is cached for the whole process; a test that decides the Approval Queue's one
@@ -17,7 +23,7 @@ def fresh_sandbox() -> None:
 
 
 def test_dashboard_renders_sales_inventory_and_upload_status_offline() -> None:
-    app = AppTest.from_file(str(APP), default_timeout=120).run()
+    app = _live_app()
 
     assert not app.exception
     headers = [h.value for h in app.header]
@@ -33,7 +39,7 @@ def test_dashboard_renders_sales_inventory_and_upload_status_offline() -> None:
 
 
 def test_dashboard_shows_each_quarantined_uploads_message() -> None:
-    app = AppTest.from_file(str(APP), default_timeout=120).run()
+    app = _live_app()
 
     statuses = app.dataframe[2].value
     ever_quarantined = set(statuses[statuses["history"].str.startswith("quarantined")]["Upload"])
@@ -43,7 +49,7 @@ def test_dashboard_shows_each_quarantined_uploads_message() -> None:
 
 
 def test_dashboard_shows_superseded_uploads_and_their_history() -> None:
-    app = AppTest.from_file(str(APP), default_timeout=120).run()
+    app = _live_app()
 
     statuses = app.dataframe[2].value
     superseded = statuses[statuses["status"] == "superseded"]
@@ -56,7 +62,7 @@ def test_dashboard_shows_superseded_uploads_and_their_history() -> None:
 
 
 def test_dashboard_audit_log_lists_safe_fixes_and_can_undo_one() -> None:
-    app = AppTest.from_file(str(APP), default_timeout=120).run()
+    app = _live_app()
     before = len(app.dataframe[-1].value)
     assert before > 0
     assert set(app.dataframe[-1].value["Action"]) == {"safe_fix", "quarantine"}
@@ -70,7 +76,7 @@ def test_dashboard_audit_log_lists_safe_fixes_and_can_undo_one() -> None:
 
 
 def test_dashboard_shows_investigations_with_their_evidence() -> None:
-    app = AppTest.from_file(str(APP), default_timeout=120).run()
+    app = _live_app()
 
     investigations = app.dataframe[4].value
     assert list(investigations["Anomaly"]) == ["stockout_risk"]
@@ -83,7 +89,7 @@ def test_dashboard_shows_investigations_with_their_evidence() -> None:
 
 @pytest.mark.usefixtures("fresh_sandbox")
 def test_dashboard_approval_queue_shows_the_reorder_and_approving_places_it() -> None:
-    app = AppTest.from_file(str(APP), default_timeout=120).run()
+    app = _live_app()
 
     investigations = app.dataframe[4].value
     queue = app.dataframe[5].value
@@ -114,7 +120,7 @@ def test_dashboard_approval_queue_shows_the_reorder_and_approving_places_it() ->
 
 @pytest.mark.usefixtures("fresh_sandbox")
 def test_dashboard_approval_queue_can_reject_a_reorder() -> None:
-    app = AppTest.from_file(str(APP), default_timeout=120).run()
+    app = _live_app()
     [action_id] = list(app.dataframe[5].value["Action"])
 
     app.button(key=f"reject-{action_id}").click().run()
@@ -126,7 +132,7 @@ def test_dashboard_approval_queue_can_reject_a_reorder() -> None:
 
 @pytest.mark.usefixtures("fresh_sandbox")
 def test_dashboard_advancing_simulated_time_expires_the_pending_reorder() -> None:
-    app = AppTest.from_file(str(APP), default_timeout=120).run()
+    app = _live_app()
     [action_id] = list(app.dataframe[5].value["Action"])
 
     app.button(key="advance-time").click().run()
