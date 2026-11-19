@@ -4,7 +4,8 @@
 
 **Blocked by:** 10
 
-**Status:** in-progress
+**Status:** awaiting-merge
+**Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/16
 
 - [x] Ops Day outcomes can be recorded and stored in the repository
 - [x] Replay Mode is the default and makes no model or network calls
@@ -38,3 +39,5 @@ Usage: Implementer 68 input, 48,115 output, 123,484 cache creation, 3,178,399 ca
 **Gate passed**: every command exited 0 (log: `.sandcastle/logs/gate-18-2026-11-19T16-34-40-056Z.log`).
 
 Usage: Body writer 2 input, 1,694 output, 75,749 cache creation, 11,842 cache read.
+
+**Pull Request opened**: https://github.com/layugjohann/retail-ops-agent/pull/16
