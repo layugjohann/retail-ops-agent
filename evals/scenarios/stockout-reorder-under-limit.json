@@ -1,0 +1,43 @@
+{
+  "id": "stockout-reorder-under-limit",
+  "description": "A demand surge drains a SKU at ST02 and detection flags a stockout risk on 2026-03-10. No Reorder is open, so the Analyst should blame the surge and recommend a Reorder. With an Auto-approval Limit of 100,000 any sensible Reorder is under it, so it is approved by rule and placed in the ERP.",
+  "tags": [
+    "analyst",
+    "ops",
+    "stockout_risk",
+    "reorder",
+    "auto-approval",
+    "store"
+  ],
+  "seed": 42,
+  "first_day": "2026-03-02",
+  "last_day": "2026-03-12",
+  "last_ops_day": "2026-03-10",
+  "sales_channels": [
+    "ST02"
+  ],
+  "upload_kinds": [
+    "sales",
+    "inventory"
+  ],
+  "planted": {
+    "anomalies": [
+      {
+        "kind": "stockout_risk",
+        "sales_channel": "ST02",
+        "day": "2026-03-12",
+        "cause": "demand_surge"
+      }
+    ]
+  },
+  "auto_approval_limit": 100000.0,
+  "expected_actions": [
+    {
+      "sales_channel": "ST02",
+      "anomaly_kind": "stockout_risk",
+      "action": "reorder",
+      "tier": 2,
+      "approval": "auto_approved"
+    }
+  ]
+}
