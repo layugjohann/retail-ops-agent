@@ -4,7 +4,8 @@
 
 **Blocked by:** 18
 
-**Status:** in-progress
+**Status:** awaiting-merge
+**Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/18
 
 - [x] Each Visitor's sandbox is isolated and seeded from the generator; nothing is stored on the server
 - [x] "Run day", approve/reject, undo, uploading their own CSV and reset all work through the Ops Day boundary
@@ -37,3 +38,5 @@ Usage: Implementer 76 input, 40,855 output, 116,920 cache creation, 3,540,763 ca
 **Gate passed**: every command exited 0 (log: `.sandcastle/logs/gate-20-2026-11-19T20-42-26-634Z.log`).
 
 Usage: Body writer 2 input, 1,669 output, 44,778 cache creation, 11,842 cache read.
+
+**Pull Request opened**: https://github.com/layugjohann/retail-ops-agent/pull/18
