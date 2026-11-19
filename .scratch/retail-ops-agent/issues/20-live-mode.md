@@ -4,7 +4,7 @@
 
 **Blocked by:** 18
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [x] Each Visitor's sandbox is isolated and seeded from the generator; nothing is stored on the server
 - [x] "Run day", approve/reject, undo, uploading their own CSV and reset all work through the Ops Day boundary
@@ -23,3 +23,17 @@
 - `BiStore` now loads rows with multi-row INSERTs instead of DuckDB's slow `executemany`, which cut seeding a sandbox from ~11s to ~3s.
 - `make` could not run in the build sandbox (Xcode shim), so the gate commands were run directly: `uv sync`, ruff check, ruff format --check, pyright, pytest (380 passed).
 - **For ticket 21:** with the shared key set as a Streamlit secret (top-level `GROQ_API_KEY`), consider setting `LIVE_SHARED_RUNS` to suit the free tier's daily limit; each Run day makes about 14 Intake calls plus two per Anomaly.
+
+Usage: Implementer 76 input, 40,855 output, 116,920 cache creation, 3,540,763 cache read; Review Session 12 input, 4,667 output, 54,441 cache creation, 316,124 cache read.
+
+**Review Session: Non-critical Findings**
+
+- dashboard/app.py `_sandbox_controls` only catches `ModelAPIError` around `run_live_day`. Any other `AgentRunError` crashes the page with a traceback instead of the 'run the day again' message. One example is `UnexpectedModelBehavior` from a weak Visitor-chosen model exceeding output retries. The day itself is kept, so no data is lost.
+- `run_live_day` takes a slot from the shared-key limiter before the Ops Day runs and keeps it if the day fails for a reason other than a rate limit (server error, network). Shared-key outages therefore use up the limit for every Visitor.
+- Naming uses some GLOSSARY Avoid words. For Ops Day: `LiveRun`, `LAST_RUN`, `SharedKeyLimit.runs`, `DEFAULT_SHARED_RUNS` and the `LIVE_SHARED_RUNS` variable. For Upload: the UI label 'CSV file'. The text 'broken or malicious ones' fits better as 'with Defects or Prompt injections'.
+- A Visitor's own CSV is decoded with `errors='replace'` before submission. Invalid bytes become U+FFFD instead of reaching Intake raw, so an encoding Defect the Visitor plants this way is silently changed rather than flagged.
+- `Sandbox` and `build_sandbox` together mix two jobs: one is a reusable steppable sandbox, the other is recording-only behaviour (re-running the last day for its resubmissions). The `if any(plan.day == days_run[-1] ...)` re-run outside the class is easy to miss; a short comment saying why it exists would help.
+
+**Gate passed**: every command exited 0 (log: `.sandcastle/logs/gate-20-2026-11-19T20-42-26-634Z.log`).
+
+Usage: Body writer 2 input, 1,669 output, 44,778 cache creation, 11,842 cache read.
