@@ -1,0 +1,74 @@
+{
+  "id": "data-problem-units-in-cases",
+  "description": "ST02 reports one SKU's sales in cases instead of single units on three days in a row. Every value looks plausible, so the Uploads pass validation and the SKU shows as a sales spike at ST02, but its net sales do not rise, so its price a unit falls to a fraction of the usual while ST01 and ST06 sell it as usual. The Analyst should conclude a Data Problem naming those days. The three Uploads go back to Intake, which Quarantines them, takes their rows out of the BI data and messages the Uploader. No alert or Reorder is taken.",
+  "tags": [
+    "analyst",
+    "intake",
+    "data-problem",
+    "units_in_cases",
+    "quarantine",
+    "store"
+  ],
+  "seed": 42,
+  "first_day": "2026-03-02",
+  "last_day": "2026-03-18",
+  "sales_channels": [
+    "ST01",
+    "ST02",
+    "ST06"
+  ],
+  "upload_kinds": [
+    "sales"
+  ],
+  "planted": {
+    "defects": [
+      {
+        "sales_channel": "ST02",
+        "day": "2026-03-16",
+        "upload_kind": "sales",
+        "defect_kind": "units_in_cases"
+      },
+      {
+        "sales_channel": "ST02",
+        "day": "2026-03-17",
+        "upload_kind": "sales",
+        "defect_kind": "units_in_cases"
+      },
+      {
+        "sales_channel": "ST02",
+        "day": "2026-03-18",
+        "upload_kind": "sales",
+        "defect_kind": "units_in_cases"
+      }
+    ]
+  },
+  "expected": [
+    {
+      "sales_channel": "ST02",
+      "day": "2026-03-16",
+      "upload_kind": "sales",
+      "status": "quarantined",
+      "defect_kinds": [
+        "units_in_cases"
+      ]
+    },
+    {
+      "sales_channel": "ST02",
+      "day": "2026-03-17",
+      "upload_kind": "sales",
+      "status": "quarantined",
+      "defect_kinds": [
+        "units_in_cases"
+      ]
+    },
+    {
+      "sales_channel": "ST02",
+      "day": "2026-03-18",
+      "upload_kind": "sales",
+      "status": "quarantined",
+      "defect_kinds": [
+        "units_in_cases"
+      ]
+    }
+  ]
+}

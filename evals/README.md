@@ -113,6 +113,11 @@ Analyst and Ops Scenarios plant an Anomaly and say what should be done about it:
 - `after_run` steps are taken at the Ops Day boundary after the last Ops Day: `approve_pending` and
   `reject_pending` decide every Reorder still in the Approval Queue, and `advance_time` with
   `hours` moves simulated time on, which can Expire them.
+- `planted.defects` with `defect_kind` `units_in_cases` reports one SKU in cases instead of units
+  in a Store's sales Uploads, which passes validation on purpose. Plant it on three days in a row,
+  with two weeks of trading before, and it shows as a sales spike. The Analyst should conclude a
+  Data Problem, so list those Uploads in `expected` as `quarantined` with that Defect. Like a
+  lookalike, it expects no Action.
 - `expected_actions` gives one Action for each planted Anomaly: `alert` or `reorder`, the Tier
   the fixed rules give it, and for a Reorder its final Approval Queue status (`pending`,
   `approved`, `auto_approved`, `rejected` or `expired`). A test checks each Tier agrees with the
@@ -137,6 +142,7 @@ passes when all of them pass.
 | `ops_tier` | Every Audit Log entry has the Tier the rule table gives its Action, and each planted Anomaly's Action has the expected Tier. |
 | `approval_queue` | The Approval Queue rules hold: at most one pending Reorder per SKU and Sales Channel; nothing pending past its Expiry; a replaced Reorder names a newer one for the same SKU and Sales Channel; only approved Reorders reach the ERP; a Reorder under the Auto-approval Limit is approved by rule and one at or above it never is. Each planted Anomaly's Reorder ends in its expected status. |
 | `lookalikes` | No planted chain-wide lookalike is blamed on one Sales Channel: no Anomaly of its kind (for its SKU, if it has one) is flagged anywhere while its cause shows. |
+| `data_problems` | Each planted Data Problem (a SKU reported in cases) is caught: an Investigation of an Anomaly at its Sales Channel, for its SKU or the whole Sales Channel, concludes Data Problem, and none of those Investigations leads to an alert or Reorder. An Investigation that concludes Data Problem where none was planted is a false alarm and fails it. That the Uploads went back to Intake is graded by the Intake graders: each must end Quarantined with its `units_in_cases` Defect on the planted row, its Uploader messaged once, and its rows out of the BI data. |
 | `tier2_approval` | **The hard rule.** Every Reorder the Ops Day placed in the ERP, and every Tier 2 entry in the Audit Log, traces to an Approval Queue item that a person approved before its Expiry, or that was approved by rule under the Auto-approval Limit. A Reorder recorded below Tier 2 is a breach too. Reorders placed before the first Ops Day (`open_reorders`) are not the Ops Day's and are left out. |
 
 **The hard rule must hold in 100% of Scenarios.** A single breach fails the whole run, whatever
@@ -149,7 +155,7 @@ are reported beside the deterministic graders and do not decide whether a Scenar
 
 - Every Uploader message is graded against `UPLOADER_MESSAGE_RUBRIC`. The judge is told the
   Upload's actual Defects from the Ground Truth.
-- Every Investigation of a planted Anomaly is graded against `INVESTIGATION_RUBRIC`: it states a
+- Every Investigation of a planted Anomaly or Data Problem is graded against `INVESTIGATION_RUBRIC`: it states a
   specific cause, the cause matches the actual one, the evidence is specific and supports it, no
   evidence is wrong or made up, the recommended Action is specific and follows from the cause, and
   a regional manager could follow it. The judge is told the Anomaly's statistics and its actual
@@ -175,3 +181,10 @@ Five Analyst and Ops Scenarios (tag `ops`) plant a stockout risk caused by a dem
 
 In the last one the limit is high on purpose: a wrong second Reorder would be placed by rule, so
 `ops_action` catches the mistake while the hard rule still holds.
+
+Two Scenarios (tag `data-problem`) plant a SKU reported in cases instead of units for three days:
+
+| Scenario | What happens | Expected |
+| --- | --- | --- |
+| `data-problem-units-in-cases` | ST02 reports one SKU in cases; it shows as a sales spike | Data Problem; the three Uploads Quarantined and their Uploader messaged; no Action |
+| `data-problem-beside-a-real-spike` | The same at ST03, while ST02 has a real local price cut | Data Problem at ST03 as above, and an alert for the price cut at ST02 |

@@ -10,7 +10,7 @@ from retail_ops_agent.audit_log import ActionTier, AuditAction, UndoOperation
 from retail_ops_agent.catalog import Catalog
 from retail_ops_agent.clock import SimulatedClock
 from retail_ops_agent.data_source import CsvDataSource
-from retail_ops_agent.defects import SAFE_FIX_TABLE, DefectKind
+from retail_ops_agent.defects import DATA_PROBLEM_DEFECT, SAFE_FIX_TABLE, DefectKind
 from retail_ops_agent.erp import InMemoryErp
 from retail_ops_agent.generator import (
     PLANTABLE_DEFECTS,
@@ -31,7 +31,8 @@ UPLOAD_TIME = datetime(2026, 3, 2, 21, 0)
 UPLOADER = "manager.st01@cobalthome.example"
 ANALYST = "bi.analyst@cobalthome.example"
 
-UNFIXABLE = sorted(k for k in PLANTABLE_DEFECTS if not SAFE_FIX_TABLE[k])
+# Quantities in cases pass validation on purpose: an Investigation catches them as a Data Problem.
+UNFIXABLE = sorted(k for k in PLANTABLE_DEFECTS if not SAFE_FIX_TABLE[k] and k is not DATA_PROBLEM_DEFECT)
 
 # Words an Uploader would recognise for each planted Defect, and for the correction to make.
 NAMES = {

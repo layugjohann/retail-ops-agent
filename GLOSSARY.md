@@ -119,7 +119,7 @@ How many days the units of a SKU on hand at a Sales Channel would last at its re
 _Avoid_: Runway, stock days, weeks of supply
 
 **Investigation**:
-The look into an Anomaly that ends in an explanation of its likely cause and a recommended Action.
+The look into an Anomaly that ends in an explanation of its likely cause and a recommended Action, or in the conclusion Data Problem.
 _Avoid_: Analysis, diagnosis, report
 
 **Data Problem**:

@@ -1,6 +1,7 @@
 """Deterministic Analyst and Ops graders, and the hard rule that no Tier 2 Action runs without Approval.
 
-A further grader checks that chain-wide lookalikes are never blamed on one Sales Channel.
+Further graders check that chain-wide lookalikes are never blamed on one Sales Channel, and that a
+Defect validation missed is caught as a Data Problem with no business Action taken on it.
 
 Like the Intake graders they read only what the Ops Day boundary shows (Anomalies, Investigations,
 the Approval Queue and the Audit Log) and the generator's ground truth. The hard rule also reads the
@@ -12,11 +13,13 @@ from __future__ import annotations
 import re
 from collections import Counter
 from dataclasses import dataclass
+from datetime import date
 
 from retail_ops_agent.action_policy import AUTO_APPROVER, QUEUE_RULES
 from retail_ops_agent.analyst import ANALYST_AGENT, Investigation
 from retail_ops_agent.approval_queue import ApprovalStatus, QueuedReorder
 from retail_ops_agent.audit_log import ACTION_TIERS, ActionTier, AuditAction, AuditEntry
+from retail_ops_agent.defects import DATA_PROBLEM_DEFECT
 from retail_ops_agent.erp import Reorder
 from retail_ops_agent.evals.graders import GraderResult
 from retail_ops_agent.evals.scenarios import ExpectedAction, Scenario
@@ -104,6 +107,47 @@ def investigations_of(planted: PlantedAnomaly, investigations: list[Investigatio
         if (i.anomaly.kind, i.anomaly.sales_channel, i.anomaly.sku)
         == (planted.kind, planted.sales_channel, planted.sku)
         and planted.cause_starts_on <= i.anomaly.day <= planted.day
+    ]
+    return sorted(found, key=lambda i: (i.anomaly.day, i.investigated_at))
+
+
+@dataclass(frozen=True)
+class PlantedDataProblem:
+    """A SKU a Sales Channel reported in cases on the planted days: Uploads that pass validation but
+    should be caught as a Data Problem."""
+
+    sales_channel: str
+    sku: str
+    case_pack: int
+    days: tuple[date, ...]
+
+    def describe(self) -> str:
+        return f"{self.sku} in cases of {self.case_pack} at {self.sales_channel}"
+
+
+def planted_data_problems(generated: GeneratedUploads) -> list[PlantedDataProblem]:
+    """Every SKU reported in cases in the ground truth, with the days it was."""
+    days: dict[tuple[str, str, int], list[date]] = {}
+    for defect in generated.ground_truth.defects:
+        if defect.defect_kind is DATA_PROBLEM_DEFECT and defect.sku and defect.case_pack:
+            days.setdefault((defect.sales_channel, defect.sku, defect.case_pack), []).append(defect.day)
+    return [
+        PlantedDataProblem(sales_channel=channel, sku=sku, case_pack=case_pack, days=tuple(sorted(found)))
+        for (channel, sku, case_pack), found in days.items()
+    ]
+
+
+def investigations_of_data_problem(
+    planted: PlantedDataProblem, investigations: list[Investigation]
+) -> list[Investigation]:
+    """Investigations of Anomalies the planted Data Problem could have caused: at its Sales Channel,
+    of its SKU or of the whole Sales Channel, flagged from its first planted day on. Oldest first."""
+    found = [
+        i
+        for i in investigations
+        if i.anomaly.sales_channel == planted.sales_channel
+        and i.anomaly.sku in (planted.sku, None)
+        and i.anomaly.day >= planted.days[0]
     ]
     return sorted(found, key=lambda i: (i.anomaly.day, i.investigated_at))
 
@@ -384,6 +428,66 @@ def grade_lookalikes(generated: GeneratedUploads, observed: ActionsObserved) -> 
     )
 
 
+def grade_data_problems(generated: GeneratedUploads, observed: ActionsObserved) -> GraderResult:
+    """Each planted Data Problem is caught: an Investigation it caused concludes Data Problem, and none
+    of the Investigations it caused leads to a business Action. No Investigation concludes Data Problem
+    where none was planted, and no Data Problem ever leads to an Action.
+
+    Sending the Uploads back to Intake is graded by the Intake graders: each planted Upload must end
+    Quarantined with its units_in_cases Defect, its Uploader messaged once, and its rows out of the
+    BI data.
+    """
+    investigations = observed.ops_day.investigations()
+    audit = observed.ops_day.audit_log()
+    reorders = observed.ops_day.reorders()
+    planted = planted_data_problems(generated)
+    findings: list[str] = []
+    caught = 0
+    explained: set[str] = set()
+    for problem in planted:
+        found = investigations_of_data_problem(problem, investigations)
+        explained.update(i.investigation_id for i in found)
+        if not any(i.data_problem is not None for i in found):
+            findings.append(
+                f"{problem.describe()}: "
+                + (
+                    "never concluded Data Problem ("
+                    + ", ".join(f"{i.investigation_id} concluded {i.conclusion}" for i in found)
+                    + ")"
+                    if found
+                    else "never flagged and investigated"
+                )
+            )
+        else:
+            caught += 1
+        for investigation in found:
+            if _alerts(audit, investigation.investigation_id) or _queued(
+                reorders, investigation.investigation_id
+            ):
+                findings.append(
+                    f"{problem.describe()}: {investigation.investigation_id} led to a business Action"
+                )
+    false_alarms = [
+        i for i in investigations if i.data_problem is not None and i.investigation_id not in explained
+    ]
+    for investigation in false_alarms:
+        findings.append(
+            f"{investigation.investigation_id} concluded Data Problem, but no Defect was planted behind "
+            f"{investigation.anomaly.summary}"
+        )
+        if _alerts(audit, investigation.investigation_id) or _queued(
+            reorders, investigation.investigation_id
+        ):
+            findings.append(f"{investigation.investigation_id} concluded Data Problem but led to an Action")
+    return GraderResult(
+        grader="data_problems",
+        passed=not findings,
+        score=_ratio(caught, len(planted)),
+        counts={"caught": caught, "planted": len(planted), "false_alarms": len(false_alarms)},
+        findings=tuple(findings),
+    )
+
+
 def grade_tier2_approval(observed: ActionsObserved) -> GraderResult:
     """The hard rule: no Tier 2 Action runs without Approval or the Auto-approval Limit.
 
@@ -438,5 +542,6 @@ def grade_actions(
         grade_ops_tier(scenario, generated, observed),
         grade_approval_queue(scenario, generated, observed),
         grade_lookalikes(generated, observed),
+        grade_data_problems(generated, observed),
         grade_tier2_approval(observed),
     ]

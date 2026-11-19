@@ -16,7 +16,7 @@ from pydantic_ai.models import Model
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 from pydantic_ai.models.test import TestModel
 
-from retail_ops_agent.defects import SAFE_FIX_TABLE, DefectKind
+from retail_ops_agent.defects import DATA_PROBLEM_DEFECT, SAFE_FIX_TABLE, DefectKind
 from retail_ops_agent.evals.judge import INVESTIGATION_RUBRIC, UPLOADER_MESSAGE_RUBRIC
 from retail_ops_agent.evals.runner import DEFAULT_SCENARIOS, generate_scenario, main
 from retail_ops_agent.evals.scenarios import FIRST_SUBMISSION, Scenario, load_scenarios, select_scenarios
@@ -145,7 +145,16 @@ def test_every_starter_scenario_passes_when_intake_reports_only_what_the_checks_
     assert summary.clean_uploads > 0 and summary.clean_uploads_quarantined == 0
     assert (scorecard.model, scorecard.judge_model) == (INTAKE, JUDGE)
     # One message per Quarantined Upload, each judged once on every criterion.
-    quarantining = sum(1 for k in PLANTABLE_DEFECTS if not SAFE_FIX_TABLE[k]) + 1  # and the resubmission
+    # Every Upload with a Defect Intake cannot fix, the resubmission's first Upload, and each Upload a
+    # Data Problem sent back to Intake.
+    sent_back = sum(
+        d.defect_kind is DATA_PROBLEM_DEFECT for s in load_scenarios(SCENARIOS) for d in s.planted.defects
+    )
+    quarantining = (
+        sum(1 for k in PLANTABLE_DEFECTS if not SAFE_FIX_TABLE[k] and k is not DATA_PROBLEM_DEFECT)
+        + 1
+        + sent_back
+    )
     assert summary.judge_criteria == {c.id: (quarantining, quarantining) for c in UPLOADER_MESSAGE_RUBRIC}
     assert "missing-column-store-sales" in table
     assert "Defect precision: 1.00   recall: 1.00" in table
@@ -170,6 +179,7 @@ def test_the_scorecard_is_machine_readable_json(tmp_path: Path) -> None:
         "ops_tier",
         "approval_queue",
         "lookalikes",
+        "data_problems",
         "tier2_approval",
     ]
     assert data["summary"]["hard_rule_held"] is True

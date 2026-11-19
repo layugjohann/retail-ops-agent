@@ -120,6 +120,16 @@ class BiStore:
         )
         self.set_status(upload_id, UploadStatus.SUPERSEDED, changed_at)
 
+    def add_defects(self, upload_id: str, defects: list[Defect]) -> None:
+        """Add Defects found after Intake, by a Data Problem, to an Upload's Defects."""
+        row = self._db.execute("SELECT defects FROM uploads WHERE upload_id = ?", [upload_id]).fetchone()
+        if row is None:
+            raise KeyError(f"no processed Upload {upload_id}")
+        merged = [*json.loads(row[0]), *(d.model_dump(mode="json") for d in defects)]
+        self._db.execute(
+            "UPDATE uploads SET defects = ? WHERE upload_id = ?", [json.dumps(merged), upload_id]
+        )
+
     def status(self, upload_id: str) -> UploadStatus:
         row = self._db.execute("SELECT status FROM uploads WHERE upload_id = ?", [upload_id]).fetchone()
         if row is None:

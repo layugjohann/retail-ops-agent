@@ -1,0 +1,93 @@
+{
+  "id": "data-problem-beside-a-real-spike",
+  "description": "Two sales spikes the same week. ST03 reports one SKU in cases instead of units on three days in a row, which passes validation; ST02 really sells a SKU at 30% off for three days. The Analyst must tell them apart: a Data Problem at ST03, whose three Uploads go back to Intake to be Quarantined with a message to the Uploader and no Action, and the local price cut at ST02, which is a real spike for the merchandiser to hear about at Tier 1.",
+  "tags": [
+    "analyst",
+    "ops",
+    "intake",
+    "data-problem",
+    "units_in_cases",
+    "sales_spike",
+    "alert",
+    "store"
+  ],
+  "seed": 42,
+  "first_day": "2026-03-02",
+  "last_day": "2026-03-18",
+  "sales_channels": [
+    "ST01",
+    "ST02",
+    "ST03",
+    "ST06"
+  ],
+  "upload_kinds": [
+    "sales"
+  ],
+  "planted": {
+    "defects": [
+      {
+        "sales_channel": "ST03",
+        "day": "2026-03-16",
+        "upload_kind": "sales",
+        "defect_kind": "units_in_cases"
+      },
+      {
+        "sales_channel": "ST03",
+        "day": "2026-03-17",
+        "upload_kind": "sales",
+        "defect_kind": "units_in_cases"
+      },
+      {
+        "sales_channel": "ST03",
+        "day": "2026-03-18",
+        "upload_kind": "sales",
+        "defect_kind": "units_in_cases"
+      }
+    ],
+    "anomalies": [
+      {
+        "kind": "sales_spike",
+        "sales_channel": "ST02",
+        "day": "2026-03-18",
+        "cause": "price_cut"
+      }
+    ]
+  },
+  "expected": [
+    {
+      "sales_channel": "ST03",
+      "day": "2026-03-16",
+      "upload_kind": "sales",
+      "status": "quarantined",
+      "defect_kinds": [
+        "units_in_cases"
+      ]
+    },
+    {
+      "sales_channel": "ST03",
+      "day": "2026-03-17",
+      "upload_kind": "sales",
+      "status": "quarantined",
+      "defect_kinds": [
+        "units_in_cases"
+      ]
+    },
+    {
+      "sales_channel": "ST03",
+      "day": "2026-03-18",
+      "upload_kind": "sales",
+      "status": "quarantined",
+      "defect_kinds": [
+        "units_in_cases"
+      ]
+    }
+  ],
+  "expected_actions": [
+    {
+      "sales_channel": "ST02",
+      "anomaly_kind": "sales_spike",
+      "action": "alert",
+      "tier": 1
+    }
+  ]
+}

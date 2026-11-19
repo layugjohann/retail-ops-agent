@@ -179,7 +179,9 @@ else:
         "drop when one Sales Channel sells far below its usual rate while the others do not; a sales "
         "spike when a SKU sells several times its usual rate at one Sales Channel only; a slow mover "
         "when a SKU all but stops selling while plenty of stock sits on hand. A drop or spike the "
-        "whole chain shares is not blamed on one Sales Channel."
+        "whole chain shares is not blamed on one Sales Channel. An Investigation that finds the "
+        "Anomaly came from Uploads that are wrong concludes Data Problem: no Action is taken, and the "
+        "Uploads go back to Intake, which Quarantines them and messages their Uploaders."
     )
     st.dataframe(
         pd.DataFrame(
@@ -190,7 +192,7 @@ else:
                     "Sales Channel": i.anomaly.sales_channel,
                     "SKU": i.anomaly.sku or "every SKU",
                     "cause": i.cause,
-                    "recommended Action": i.recommended_action.kind.value,
+                    "conclusion": i.conclusion,
                     "Investigation": i.investigation_id,
                 }
                 for i in investigations
@@ -203,10 +205,18 @@ else:
             st.markdown(f"**Likely cause:** {i.cause}")
             st.markdown("**Evidence:**\n" + "\n".join(f"- {item}" for item in i.evidence))
             st.markdown(f"**Statistics that flagged it:** {i.anomaly.summary}.")
-            st.markdown(
-                f"**Recommended Action ({i.recommended_action.kind.value}):** "
-                f"{i.recommended_action.description}"
-            )
+            if i.data_problem is not None:
+                days = ", ".join(d.isoformat() for d in i.data_problem.days)
+                sent_back = ", ".join(i.data_problem.upload_ids) or "none still loaded"
+                st.markdown(
+                    f"**Data Problem** in the {i.data_problem.upload_kind.value} Uploads of {days}: "
+                    f"{i.data_problem.what_is_wrong} Sent back to Intake: {sent_back}. No Action taken."
+                )
+            elif i.recommended_action is not None:
+                st.markdown(
+                    f"**Recommended Action ({i.recommended_action.kind.value}):** "
+                    f"{i.recommended_action.description}"
+                )
             st.caption(f"Investigated by the {i.investigated_by} at {i.investigated_at:%Y-%m-%d %H:%M}.")
 
 st.header("Approval Queue")

@@ -20,7 +20,7 @@ from retail_ops_agent.action_policy import (
     Route,
     decide,
 )
-from retail_ops_agent.analyst import Investigation, investigate
+from retail_ops_agent.analyst import MAX_HISTORY_DAYS, Investigation, investigate
 from retail_ops_agent.anomalies import Anomaly, detect_anomalies
 from retail_ops_agent.approval_queue import ApprovalQueue, ApprovalStatus, QueuedReorder
 from retail_ops_agent.audit_log import AuditAction, AuditEntry, AuditLog, UndoOperation, UndoRecipe
@@ -28,13 +28,20 @@ from retail_ops_agent.bi_store import BiStore
 from retail_ops_agent.catalog import SalesChannelKind, Sku
 from retail_ops_agent.clock import Clock
 from retail_ops_agent.data_source import DataSource
-from retail_ops_agent.defects import Defect, defect_location
+from retail_ops_agent.defects import DATA_PROBLEM_DEFECT, Defect, defect_location
 from retail_ops_agent.erp import ErpClient
 from retail_ops_agent.intake import run_intake
 from retail_ops_agent.notifier import Notification, Notifier
 from retail_ops_agent.ops_agent import OPS_AGENT, ActionProposal, ProposedActionKind, propose_action
-from retail_ops_agent.upload_formats import SalesLine, StockLine, parse_upload
-from retail_ops_agent.uploader_messages import quarantine_subject
+from retail_ops_agent.upload_formats import (
+    QUANTITY_COLUMN,
+    SalesLine,
+    StockLine,
+    format_for,
+    parse_upload,
+    rows_of_sku,
+)
+from retail_ops_agent.uploader_messages import data_problem_message, quarantine_subject
 from retail_ops_agent.uploads import Upload, UploadKind, UploadStatus
 from retail_ops_agent.views import (
     InventoryBySalesChannel,
@@ -142,6 +149,13 @@ class OpsDay:
         There is at most one pending Reorder per SKU and Sales Channel. A newer Investigation's
         Reorder replaces the pending one, which can then no longer be approved; the replacement is
         recorded in the Audit Log. Pending Actions past their Expiry are Expired first.
+
+        An Investigation can instead conclude Data Problem: the Anomaly was caused by a Defect that
+        validation missed, such as quantities reported in cases instead of units. Then no Action is
+        taken on it. The Uploads behind it go back to Intake, which Quarantines each one: its rows
+        leave the BI data, the Quarantine is a Tier 1 Action in the Audit Log that can be undone,
+        and its Uploader is messaged. The day's other Anomalies are investigated only if they still
+        show without those Uploads.
         """
         self._expire()
         processed = self._bi.processed_upload_ids()
@@ -182,13 +196,15 @@ class OpsDay:
             else:
                 self._load(upload, result.sales, result.stock)
                 entries.extend(self._record_safe_fix(upload, defect) for defect in result.safe_fixed)
-        by_id = {u.upload_id: u for u in self._bi.uploads()}
-        outcomes = [by_id[upload_id] for upload_id in dict.fromkeys(touched)]
-        anomalies = self._detect(day)
         investigations: list[Investigation] = []
         reorders: list[QueuedReorder] = []
         skus = {s.code: s for s in self._erp.list_skus()}
-        for anomaly in anomalies:
+        # Once a Data Problem takes Uploads out of the BI data, only Anomalies that still show in
+        # what is left are investigated.
+        still_showing: set[str] | None = None
+        for anomaly in self._detect(day):
+            if still_showing is not None and anomaly.anomaly_id not in still_showing:
+                continue
             investigation = investigate(
                 anomaly,
                 bi=self._bi,
@@ -196,6 +212,19 @@ class OpsDay:
                 model=self._models.analyst,
                 investigated_at=self._clock.now(),
             )
+            if investigation.data_problem is not None:
+                # No business Action: the Uploads behind it go back to Intake (ADR 0003).
+                investigation, sent_back = self._send_back_to_intake(investigation)
+                self._bi.record_anomaly(anomaly)
+                self._bi.record_investigation(investigation)
+                investigations.append(investigation)
+                for upload, entry, message in sent_back:
+                    touched.append(upload.upload_id)
+                    entries.append(entry)
+                    messages.append(message)
+                if sent_back:
+                    still_showing = {a.anomaly_id for a in self._detect(day)}
+                continue
             sku = skus.get(anomaly.sku) if anomaly.sku is not None else None
             proposal = propose_action(investigation, sku, self._models.ops)
             cost = (
@@ -231,12 +260,13 @@ class OpsDay:
                     )
                     entries.append(self._audit.entry(_required(item.audit_entry_id)))
                 reorders.append(item)
+        by_id = {u.upload_id: u for u in self._bi.uploads()}
         return OpsDayOutcome(
             day=day,
-            uploads=outcomes,
+            uploads=[by_id[upload_id] for upload_id in dict.fromkeys(touched)],
             audit_entries=entries,
             uploader_messages=messages,
-            anomalies=anomalies,
+            anomalies=[i.anomaly for i in investigations],
             investigations=investigations,
             reorders=reorders,
             approval_queue=self._queue.pending(),
@@ -499,6 +529,78 @@ class OpsDay:
         if target.upload_id is not None:
             self._settle_upload(target.upload_id)
         return entry
+
+    def _send_back_to_intake(
+        self, investigation: Investigation
+    ) -> tuple[Investigation, list[tuple[Upload, AuditEntry, UploaderMessage]]]:
+        """Send the Uploads behind a Data Problem back to Intake, which Quarantines each one: its rows
+        leave the BI data, the Quarantine is a Tier 1 Action in the Audit Log, and its Uploader is
+        told what to correct.
+
+        Which Uploads is decided by rule, not by the model: the current, loaded Uploads of the kind
+        and days the Analyst named, from the Anomaly's own Sales Channel, within the history the
+        Analyst can see. Returns the Investigation with the Uploads it sent back.
+        """
+        problem = investigation.data_problem
+        assert problem is not None
+        anomaly = investigation.anomaly
+        earliest = anomaly.day - timedelta(days=MAX_HISTORY_DAYS - 1)
+        loaded = (UploadStatus.ACCEPTED, UploadStatus.SAFE_FIXED)
+        upload_ids = [
+            upload_id
+            for day in sorted(set(problem.days))
+            if earliest <= day <= anomaly.day
+            for upload_id in self._bi.current_upload_ids(anomaly.sales_channel, day, problem.upload_kind)
+            if self._bi.status(upload_id) in loaded
+        ]
+        upload_format = format_for(self._channel_kinds()[anomaly.sales_channel], problem.upload_kind)
+        column = QUANTITY_COLUMN[upload_format]
+        sent_back: list[tuple[Upload, AuditEntry, UploaderMessage]] = []
+        for upload_id in upload_ids:
+            upload = self._processed_upload(upload_id)
+            rows = rows_of_sku(upload.content, upload_format, anomaly.sku) if anomaly.sku else []
+            defect = Defect(
+                kind=DATA_PROBLEM_DEFECT,
+                row=rows[0] if len(rows) == 1 else None,
+                column=column,
+                detail=problem.what_is_wrong.strip().rstrip(".")
+                or f"the quantities in column {column} are not in single units",
+            )
+            now = self._clock.now()
+            self._bi.unload(upload_id)
+            self._bi.add_defects(upload_id, [defect])
+            self._bi.set_status(upload_id, UploadStatus.QUARANTINED, now)
+            entry = self._audit.append(
+                recorded_at=now,
+                action=AuditAction.QUARANTINE,
+                triggered_by=(
+                    f"Data Problem concluded by Investigation {investigation.investigation_id}: "
+                    f"{anomaly.summary}"
+                ),
+                taken_by=INTAKE_AGENT,
+                summary=(
+                    f"Quarantined Upload {upload_id}, sent back to Intake by a Data Problem "
+                    f"({DATA_PROBLEM_DEFECT.value}), took its rows out of the BI data and messaged "
+                    f"{upload.uploader}"
+                ),
+                upload_id=upload_id,
+                defect=defect,
+                investigation_id=investigation.investigation_id,
+                undo=UndoRecipe(
+                    operation=UndoOperation.RELEASE_UPLOAD,
+                    upload_id=upload_id,
+                    description=(
+                        f"Release Upload {upload_id} from Quarantine: load its rows back into the BI "
+                        "data and accept it, as it was before the Data Problem."
+                    ),
+                ),
+            )
+            message = self._message_uploader(upload, data_problem_message(upload, [defect]))
+            sent_back.append((upload, entry, message))
+        updated = investigation.model_copy(
+            update={"data_problem": problem.model_copy(update={"upload_ids": upload_ids})}
+        )
+        return updated, sent_back
 
     def _record_quarantine(self, upload: Upload, defects: list[Defect]) -> AuditEntry:
         kinds = ", ".join(dict.fromkeys(d.kind.value for d in defects))
