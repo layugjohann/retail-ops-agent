@@ -33,8 +33,9 @@ def test_dashboard_renders_sales_inventory_and_upload_status_offline() -> None:
     assert "Uploader messages" in headers
     assert "Investigations" in headers
     assert "Approval Queue" in headers
+    assert "Hours Saved" in headers
     assert "Audit Log" in headers
-    assert len(app.dataframe) == 7
+    assert len(app.dataframe) == 8
     assert "quarantined" in set(app.dataframe[2].value["status"])
 
 
@@ -73,6 +74,23 @@ def test_dashboard_audit_log_lists_safe_fixes_and_can_undo_one() -> None:
     log = app.dataframe[-1].value
     assert len(log) == before + 1
     assert log["Action"].iloc[0] == "undo"
+
+
+def test_dashboard_shows_hours_saved_with_its_assumptions() -> None:
+    app = _live_app()
+
+    assumptions = app.dataframe[-2].value
+    log = app.dataframe[-1].value
+    assert set(assumptions["Action"]) == {"safe_fix", "quarantine", "alert", "reorder"}
+    assert set(assumptions["basis"]) == {"assumption"}
+    assert all(assumptions["source or assumption"].str.len() > 0)
+    for row in assumptions.to_dict("records"):
+        standing = (log["Action"] == row["Action"]) & log["undone by entry"].isna()
+        assert row["entries"] == standing.sum()
+        assert row["minutes saved"] == row["entries"] * row["minutes each"]
+    [metric] = [m for m in app.metric if m.label == "Hours Saved"]
+    assert metric.value == f"{assumptions['minutes saved'].sum() / 60:.2f} h"
+    assert any("SIMULATED" in c.value for c in app.caption)
 
 
 def test_dashboard_shows_investigations_with_their_evidence() -> None:

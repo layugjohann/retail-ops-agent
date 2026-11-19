@@ -32,6 +32,7 @@ from retail_ops_agent.clock import Clock
 from retail_ops_agent.data_source import DataSource
 from retail_ops_agent.defects import DATA_PROBLEM_DEFECT, Defect, defect_location
 from retail_ops_agent.erp import ErpClient
+from retail_ops_agent.hours_saved import Baseline, HoursSaved, hours_saved, load_baseline
 from retail_ops_agent.intake import run_intake
 from retail_ops_agent.notifier import Notification, Notifier
 from retail_ops_agent.ops_agent import OPS_AGENT, ActionProposal, ProposedActionKind, propose_action
@@ -96,12 +97,15 @@ class OpsDay:
         clock: Clock,
         database: str = ":memory:",
         auto_approval_limit: float = DEFAULT_AUTO_APPROVAL_LIMIT,
+        baseline: Baseline | None = None,
     ) -> None:
         """auto_approval_limit is the Auto-approval Limit: a Reorder costing less is approved by rule;
-        every other Reorder waits in the Approval Queue for a person."""
+        every other Reorder waits in the Approval Queue for a person. baseline is the manual timings
+        Hours Saved is computed from; the discovery documents' baseline by default."""
         if auto_approval_limit < 0:
             raise ValueError("the Auto-approval Limit cannot be negative")
         self._auto_approval_limit = auto_approval_limit
+        self._baseline = baseline or load_baseline()
         self._models = models
         self._erp = erp
         self._notifier = notifier
@@ -896,6 +900,11 @@ class OpsDay:
     def audit_log(self) -> list[AuditEntry]:
         """Every Audit Log entry, newest first, with the undo currently reversing it, if any."""
         return list(reversed(self._audit.entries()))
+
+    def hours_saved(self) -> HoursSaved:
+        """Hours Saved so far: standing Audit Log entries times the baseline's minutes for their task,
+        with every input behind the figure."""
+        return hours_saved(self._audit.entries(), self._baseline)
 
     def upload_statuses(self) -> list[UploadOutcome]:
         """Every processed Upload by Sales Channel, day and kind, oldest first: Superseded ones too,

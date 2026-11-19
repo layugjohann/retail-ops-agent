@@ -33,6 +33,14 @@ its JSON. With a free-tier key in `.env.local` the agents use that model, paced 
 without one, the offline scripted model stands in. The sidebar switches to Live Mode, a seeded
 sandbox run through the Ops Day boundary.
 
+## Discovery and Hours Saved
+
+`docs/discovery/` holds the simulated discovery documents: an engagement brief, personas, the
+current manual processes step by step, and a baseline of manual timings. The baseline's
+machine-readable form, `src/retail_ops_agent/baseline.json`, feeds the dashboard's Hours Saved:
+the Audit Log entries of each baseline task's Action that no undo reversed, times its minutes each
+time. Every timing is an assumption, marked as one, and shown next to the figure.
+
 ## The ERP MCP server
 
 Cobalt Home's mock ERP runs as a standalone MCP server (ADR 0006). Its tools read Sales Channels,

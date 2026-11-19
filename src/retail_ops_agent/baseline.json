@@ -1,0 +1,50 @@
+{
+  "simulated": true,
+  "label": "SIMULATED baseline for the fictional Client Cobalt Home. Every timing is an engagement assumption, not a measurement; see docs/discovery/baseline.md.",
+  "tasks": [
+    {
+      "task_id": "fix-small-upload-defect",
+      "task": "Find and correct a small Upload Defect by hand (renamed header, stray whitespace, byte-order mark, wrong delimiter), reload the file and check its totals",
+      "persona": "BI analyst",
+      "audit_action": "safe_fix",
+      "minutes_each": 10,
+      "how_often": "About 1 a day: roughly 1 in 14 of the 14 Uploads a day (7 Sales Channels x sales and inventory)",
+      "basis": "assumption",
+      "source": null,
+      "reasoning": "Open the CSV, notice why the import failed or looks wrong, edit it, re-run the import and eyeball the totals against the day before. Assumed 10 minutes when the analyst is not interrupted; no public timing for this exact task was found."
+    },
+    {
+      "task_id": "chase-unfixable-upload",
+      "task": "Diagnose an Upload with a Defect that cannot be fixed without asking, write to the Uploader, chase the resend and load it",
+      "persona": "BI analyst",
+      "audit_action": "quarantine",
+      "minutes_each": 25,
+      "how_often": "About 3 a week",
+      "basis": "assumption",
+      "source": null,
+      "reasoning": "Work out which rows and columns are wrong, decide it cannot be fixed without guessing, write a chat message the Store or e-commerce team can act on, answer their follow-up questions, then reload the corrected file. Assumed 25 minutes spread across the day, not counting the time the Uploader spends."
+    },
+    {
+      "task_id": "investigate-anomaly",
+      "task": "Notice a stockout risk, Sales Drop, Sales Spike or Slow Mover, work out its likely cause and tell the person who should act",
+      "persona": "BI analyst",
+      "audit_action": "alert",
+      "minutes_each": 45,
+      "how_often": "About 2 a week",
+      "basis": "assumption",
+      "source": null,
+      "reasoning": "Pull the SKU's recent sales and stock for the Sales Channel, compare with the other Sales Channels and its own history, check the ERP for Lead Time and open Reorders, then write it up. Discovery interviews (simulated) described this as 'most of an hour'; assumed 45 minutes."
+    },
+    {
+      "task_id": "key-in-reorder",
+      "task": "Work out a Reorder quantity from Days of Cover, Lead Time and case pack, and key the Reorder into the ERP",
+      "persona": "inventory planner",
+      "audit_action": "reorder",
+      "minutes_each": 15,
+      "how_often": "About 3 a week",
+      "basis": "assumption",
+      "source": null,
+      "reasoning": "Check stock and recent sales, work out how many units cover the Lead Time, round to the case pack, look up the Supplier and enter the Reorder in the ERP. Assumed about 17 minutes by hand; 15 are counted because the planner still spends a minute or two on the Approval. The Investigation that led to the Reorder is not counted, which keeps the figure conservative."
+    }
+  ]
+}

@@ -20,6 +20,7 @@ from retail_ops_agent.anomalies import AnomalyKind
 from retail_ops_agent.approval_queue import QueuedReorder
 from retail_ops_agent.defects import DefectKind
 from retail_ops_agent.generator import AnomalyPlan, DefectPlan, ResubmissionKind, ResubmissionPlan
+from retail_ops_agent.hours_saved import HoursSaved
 from retail_ops_agent.models import models_from_environment
 from retail_ops_agent.ops_day import OpsDay
 from retail_ops_agent.replay import (
@@ -358,6 +359,9 @@ def _live_mode() -> None:
             f"{c.replaced_by}, and it no longer holds)."
         )
 
+    st.header("Hours Saved")
+    _hours_saved(ops_day.hours_saved())
+
     st.header("Audit Log")
     entries = ops_day.audit_log()
     if not entries:
@@ -398,6 +402,36 @@ def _live_mode() -> None:
                 else:
                     st.success(f"Recorded entry {undo.entry_id}: {undo.summary}")
                     st.rerun()
+
+
+def _hours_saved(saved: HoursSaved) -> None:
+    """Hours Saved, with every assumption behind it next to the figure."""
+    st.metric("Hours Saved", f"{saved.hours:.2f} h")
+    st.caption(
+        "Hours Saved = Audit Log entries of each task's Action that still stand (not undone) times the "
+        f"baseline's minutes for that task. {saved.label}"
+    )
+    if saved.undone_entries:
+        st.caption(f"{saved.undone_entries} undone entries are left out.")
+    st.dataframe(
+        pd.DataFrame(
+            [
+                {
+                    "task done by hand": line.task.task,
+                    "persona": line.task.persona,
+                    "Action": line.task.audit_action.value,
+                    "entries": line.matching_entries,
+                    "minutes each": line.task.minutes_each,
+                    "minutes saved": line.minutes_saved,
+                    "how often": line.task.how_often,
+                    "basis": line.task.basis.value,
+                    "source or assumption": line.task.source or line.task.reasoning,
+                }
+                for line in saved.lines
+            ]
+        ),
+        hide_index=True,
+    )
 
 
 @st.cache_resource
@@ -472,6 +506,9 @@ def _replay_mode() -> None:
             _replay_investigation(step)
         case ReplayStage.ACTIONS:
             _replay_actions(step)
+    if step.hours_saved is not None:
+        st.header("Hours Saved so far")
+        _hours_saved(step.hours_saved)
 
 
 def _audit_rows(step: ReplayStep) -> list[dict[str, object]]:

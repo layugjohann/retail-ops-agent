@@ -180,6 +180,8 @@ def test_dashboard_opens_in_replay_mode_without_a_model_or_network() -> None:
     assert app.radio(key="mode").value == "Replay Mode"
     assert app.header[0].value.endswith(": Intake")
     assert app.dataframe
+    assert "Hours Saved so far" in [h.value for h in app.header]
+    assert any(m.label == "Hours Saved" for m in app.metric)
 
 
 @pytest.mark.usefixtures("no_model_or_network")
