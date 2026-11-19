@@ -32,6 +32,7 @@ from retail_ops_agent.audit_log import AuditAction, AuditEntry
 from retail_ops_agent.defects import DefectKind
 from retail_ops_agent.evals.throttle import Throttle, ThrottledModel
 from retail_ops_agent.generator import AnomalyPlan, DefectPlan, ResubmissionKind, ResubmissionPlan
+from retail_ops_agent.hours_saved import Baseline, HoursSaved, hours_saved, load_baseline
 from retail_ops_agent.models import model_name_from_environment, models_from_environment
 from retail_ops_agent.ops_day import Models, OpsDay
 from retail_ops_agent.sandbox import build_sandbox
@@ -141,6 +142,8 @@ class ReplayStep(BaseModel):
     withdrawn_reorders: list[QueuedReorder] = []
     flagged_reorders: list[FlaggedReorder] = []
     decisions: list[RecordedDecision] = []
+    # Hours Saved from every Audit Log entry the Recording has shown up to and including this step.
+    hours_saved: HoursSaved | None = None
 
 
 # Playing back
@@ -155,8 +158,12 @@ def step_count(recording: Recording) -> int:
     return len(recording.ops_days) * len(ReplayStage)
 
 
-def replay_step(recording: Recording, position: int) -> ReplayStep:
-    """The step at position (0-based): each recorded Ops Day's stages in pipeline order."""
+def replay_step(recording: Recording, position: int, baseline: Baseline | None = None) -> ReplayStep:
+    """The step at position (0-based): each recorded Ops Day's stages in pipeline order.
+
+    Its Hours Saved counts every Audit Log entry shown so far, against baseline (the discovery
+    documents' baseline by default).
+    """
     total = step_count(recording)
     if not 0 <= position < total:
         raise ValueError(f"step {position} is outside the Recording's {total} steps")
@@ -170,6 +177,7 @@ def replay_step(recording: Recording, position: int) -> ReplayStep:
         stage=stage,
         title=f"Ops Day {outcome.day.isoformat()}: {STAGE_TITLES[stage]}",
         narration="",
+        hours_saved=hours_saved(_shown_entries(recording, position), baseline or load_baseline()),
     )
     match stage:
         case ReplayStage.INTAKE:
@@ -222,6 +230,21 @@ def replay_step(recording: Recording, position: int) -> ReplayStep:
                     "decisions": recorded.decisions,
                 }
             )
+
+
+def _entries_of(recorded: RecordedOpsDay) -> list[AuditEntry]:
+    return recorded.outcome.audit_entries + [e for d in recorded.decisions for e in d.audit_entries]
+
+
+def _shown_entries(recording: Recording, position: int) -> list[AuditEntry]:
+    """Every Audit Log entry shown up to and including the step at position: earlier Ops Days' entries,
+    and this Ops Day's from the stages reached so far."""
+    day_index, stage_index = divmod(position, len(ReplayStage))
+    shown = [e for recorded in recording.ops_days[:day_index] for e in _entries_of(recorded)]
+    today = _entries_of(recording.ops_days[day_index])
+    if list(ReplayStage)[stage_index] is ReplayStage.ACTIONS:
+        return shown + today
+    return shown + [e for e in today if _intake_entry(e)]
 
 
 def _intake_entry(entry: AuditEntry) -> bool:
