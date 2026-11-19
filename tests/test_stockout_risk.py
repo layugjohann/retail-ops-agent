@@ -103,7 +103,8 @@ def test_a_planted_stockout_risk_is_flagged_investigated_and_alerted_at_tier_1(
     assert investigation.anomaly == anomaly
     assert investigation.cause == "A demand surge drained the stock."
     assert investigation.evidence
-    assert investigation.recommended_action.kind == "alert"
+    assert investigation.recommended_action is not None and investigation.recommended_action.kind == "alert"
+    assert investigation.data_problem is None
     [flagging_day] = [o for o in run.outcomes if o.anomalies]
     assert flagging_day.day == anomaly.day
     assert flagging_day.investigations == [investigation]

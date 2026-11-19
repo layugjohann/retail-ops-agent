@@ -181,10 +181,11 @@ def test_every_action_scenario_passes_with_models_that_investigate_and_act_corre
     # Placed in the ERP: the one under the Auto-approval Limit and the one a person approved.
     assert (summary.tier2_actions, summary.tier2_breaches) == (2, 0)
     assert summary.hard_rule_held and summary.run_passed
-    # Each planted Anomaly's Investigation is judged once on every criterion of its rubric.
-    assert summary.investigation_criteria == {
-        c.id: (len(ACTION_SCENARIOS), len(ACTION_SCENARIOS)) for c in INVESTIGATION_RUBRIC
-    }
+    # Each planted Anomaly's Investigation, and each Data Problem's, is judged once on every criterion.
+    judged = len(ACTION_SCENARIOS) + sum(
+        bool(s.planted.defects) for s in ACTION_SCENARIOS if "data-problem" in s.tags
+    )
+    assert summary.investigation_criteria == {c.id: (judged, judged) for c in INVESTIGATION_RUBRIC}
     assert "Tier 2 Actions run: 2   without Approval: 0" in table
     assert "Run: PASS" in table
 

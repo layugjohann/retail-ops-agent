@@ -18,7 +18,13 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
-from retail_ops_agent.catalog import SalesChannelKind
+from retail_ops_agent.anomalies import (
+    MIN_USUAL_SALES_DAYS,
+    SPIKE_MIN_DAILY_UNITS,
+    SPIKE_RATIO,
+    USUAL_WINDOW_DAYS,
+)
+from retail_ops_agent.catalog import SalesChannelKind, Sku
 from retail_ops_agent.defects import DefectKind, has_safe_fix
 from retail_ops_agent.generator.anomalies import PlantedAnomaly, PlantedLookalike
 from retail_ops_agent.generator.formats import upload_csv
@@ -27,6 +33,8 @@ from retail_ops_agent.generator.resubmissions import PlantedResubmission, Resubm
 from retail_ops_agent.upload_formats import (
     MAX_PLAUSIBLE_DAILY_UNITS,
     MAX_PLAUSIBLE_ON_HAND,
+    QUANTITY_COLUMN,
+    SKU_COLUMN,
     UploadFormat,
     format_for,
 )
@@ -45,8 +53,13 @@ PLANTABLE_DEFECTS = frozenset(
         DefectKind.IMPOSSIBLE_QUANTITY,
         DefectKind.UNKNOWN_SKU,
         DefectKind.DATE_MISMATCH,
+        DefectKind.UNITS_IN_CASES,
     }
 )
+
+# A SKU reported in cases sells at least this much more than a sales spike needs on every planted
+# day, so detection flags it whatever the day-to-day noise in its usual rate.
+_CASES_SPIKE_MARGIN = 1.25
 
 # Names Uploaders really give columns, beside case and spacing variants of the expected name.
 _RENAMES: dict[str, tuple[str, ...]] = {
@@ -82,18 +95,8 @@ _DAY_COLUMN = {
     UploadFormat.ONLINE_SHOP_ORDER_LINES: "created_at",
     UploadFormat.ONLINE_SHOP_STOCK_SNAPSHOT: "Snapshot Time",
 }
-_SKU_COLUMN = {
-    UploadFormat.STORE_SALES: "sku",
-    UploadFormat.STORE_INVENTORY: "sku",
-    UploadFormat.ONLINE_SHOP_ORDER_LINES: "sku",
-    UploadFormat.ONLINE_SHOP_STOCK_SNAPSHOT: "SKU Code",
-}
-_QUANTITY_COLUMN = {
-    UploadFormat.STORE_SALES: "quantity_sold",
-    UploadFormat.STORE_INVENTORY: "on_hand",
-    UploadFormat.ONLINE_SHOP_ORDER_LINES: "quantity",
-    UploadFormat.ONLINE_SHOP_STOCK_SNAPSHOT: "Available Quantity",
-}
+_SKU_COLUMN = SKU_COLUMN
+_QUANTITY_COLUMN = QUANTITY_COLUMN
 # The column a repeated day is reported at: what identifies a row within the day.
 _REPEAT_COLUMN = {
     UploadFormat.STORE_SALES: "sku",
@@ -104,7 +107,13 @@ _REPEAT_COLUMN = {
 
 
 class DefectPlan(BaseModel):
-    """One Defect to plant in the Upload a Sales Channel sends for a day and kind."""
+    """One Defect to plant in the Upload a Sales Channel sends for a day and kind.
+
+    units_in_cases is planted in a Store's sales Uploads, passing validation on purpose: one SKU's
+    quantity sold is its case pack times the units really sold, while its net sales stay right. Every
+    units_in_cases plan for a Sales Channel uses the same SKU, so planting it on three days in a row
+    shows as a sales spike that an Investigation should conclude is a Data Problem.
+    """
 
     model_config = ConfigDict(frozen=True)
 
@@ -128,6 +137,9 @@ class PlantedDefect(BaseModel):
     column: str | None
     has_safe_fix: bool
     expected_status: UploadStatus
+    # For units_in_cases: the SKU reported in cases, and its case pack.
+    sku: str | None = None
+    case_pack: int | None = None
 
 
 class GroundTruth(BaseModel):
@@ -201,6 +213,7 @@ def generate_uploads(
             raise ValueError(f"{plan.day} is not one of the generated days")
         by_upload.setdefault((plan.sales_channel, plan.day, plan.upload_kind), []).append(plan)
 
+    in_cases = _skus_in_cases(history, plans)
     planted_contents: dict[tuple[str, date, UploadKind], str] = {}
     planted: list[PlantedDefect] = []
     for key, upload_plans in by_upload.items():
@@ -212,12 +225,16 @@ def generate_uploads(
             known_skus=frozenset(s.code for s in history.catalog.skus),
         )
         locations: list[tuple[DefectPlan, int | None, str | None]] = []
-        for plan in upload_plans:
-            rng = random.Random(
-                f"defect:{history.catalog.seed}:{plan.sales_channel}:{plan.day.isoformat()}:"
-                f"{plan.upload_kind.value}:{plan.defect_kind.value}"
-            )
-            row, column = _PLANTERS[plan.defect_kind](draft, rng)
+        # Reported in cases first, while every column is still where it belongs.
+        for plan in sorted(upload_plans, key=lambda p: p.defect_kind is not DefectKind.UNITS_IN_CASES):
+            if plan.defect_kind is DefectKind.UNITS_IN_CASES:
+                row, column = _units_in_cases(draft, in_cases[(channel, kind)])
+            else:
+                rng = random.Random(
+                    f"defect:{history.catalog.seed}:{plan.sales_channel}:{plan.day.isoformat()}:"
+                    f"{plan.upload_kind.value}:{plan.defect_kind.value}"
+                )
+                row, column = _PLANTERS[plan.defect_kind](draft, rng)
             locations.append((plan, row, column))
         planted_contents[key] = draft.render()
         expected = (
@@ -235,6 +252,10 @@ def generate_uploads(
                 column=column,
                 has_safe_fix=has_safe_fix(plan.defect_kind),
                 expected_status=expected,
+                sku=in_cases[(channel, kind)].code if plan.defect_kind is DefectKind.UNITS_IN_CASES else None,
+                case_pack=in_cases[(channel, kind)].case_pack
+                if plan.defect_kind is DefectKind.UNITS_IN_CASES
+                else None,
             )
             for plan, row, column in locations
         )
@@ -393,6 +414,75 @@ def _date_mismatch(draft: _Draft, rng: random.Random) -> tuple[int | None, str |
     for row in draft.rows:
         row[cell] = other + row[cell][len(other) :]
     return None, column
+
+
+def _skus_in_cases(history: History, plans: Sequence[DefectPlan]) -> dict[tuple[str, UploadKind], Sku]:
+    """The SKU each Sales Channel reports in cases on its planted days.
+
+    It is one whose quantities, multiplied by its case pack, make a sales spike on every planted day
+    (several times its usual rate, and enough units) yet still look plausible to validation, chosen
+    at random among those from a generator seeded from the catalog seed and the plan. With too few
+    generated days before the first planted day to have a usual rate, it need only sell enough.
+    """
+    days_by_channel: dict[tuple[str, UploadKind], list[date]] = {}
+    for plan in plans:
+        if plan.defect_kind is DefectKind.UNITS_IN_CASES:
+            days_by_channel.setdefault((plan.sales_channel, plan.upload_kind), []).append(plan.day)
+    chosen: dict[tuple[str, UploadKind], Sku] = {}
+    for (channel, kind), days in days_by_channel.items():
+        if format_for(_channel_kind(history, channel), kind) is not UploadFormat.STORE_SALES:
+            raise ValueError("units_in_cases can only be planted in a Store's sales Uploads")
+        first = min(days)
+        usual_days = [
+            d
+            for d in (first - timedelta(days=offset) for offset in range(1, USUAL_WINDOW_DAYS + 1))
+            if d in history.days
+        ]
+        # Too little history before to have a usual rate: any SKU that sold is reported in cases.
+        if len(usual_days) < MIN_USUAL_SALES_DAYS:
+            usual_days = []
+        usual = {
+            sku: sum(sold) / len(sold) for sku, sold in _units_by_sku(history, channel, usual_days).items()
+        }
+        planted = _units_by_sku(history, channel, sorted(set(days)))
+        candidates = [
+            sku
+            for sku in sorted(history.catalog.skus, key=lambda s: s.code)
+            if sku.case_pack > 1
+            and all(
+                SPIKE_MIN_DAILY_UNITS <= units * sku.case_pack <= MAX_PLAUSIBLE_DAILY_UNITS
+                and units * sku.case_pack >= SPIKE_RATIO * _CASES_SPIKE_MARGIN * usual.get(sku.code, 0.0)
+                for units in planted.get(sku.code, [0])
+            )
+            and (not usual_days or usual.get(sku.code, 0.0) > 0)
+        ]
+        if not candidates:
+            raise ValueError(f"no SKU at {channel} sells enough to show units_in_cases as a sales spike")
+        rng = random.Random(
+            f"units_in_cases:{history.catalog.seed}:{channel}:{kind.value}:{first.isoformat()}"
+        )
+        chosen[(channel, kind)] = rng.choice(candidates)
+    return chosen
+
+
+def _units_by_sku(history: History, sales_channel: str, days: Sequence[date]) -> dict[str, list[int]]:
+    units: dict[str, list[int]] = {}
+    for day in days:
+        for row in history.sales(sales_channel, day):
+            units.setdefault(row.sku, []).append(row.quantity_sold)
+    return units
+
+
+def _units_in_cases(draft: _Draft, sku: Sku) -> tuple[int | None, str | None]:
+    """Report the SKU's quantity as its case pack times the units sold; net sales stay as they were."""
+    sku_cell = draft.index(_SKU_COLUMN[draft.upload_format])
+    column = _QUANTITY_COLUMN[draft.upload_format]
+    quantity_cell = draft.index(column)
+    for index, row in enumerate(draft.rows):
+        if row[sku_cell] == sku.code:
+            row[quantity_cell] = str(int(row[quantity_cell]) * sku.case_pack)
+            return index + 2, column
+    raise ValueError(f"the Upload has no row for {sku.code}")
 
 
 def _channel_kind(history: History, sales_channel: str) -> SalesChannelKind:

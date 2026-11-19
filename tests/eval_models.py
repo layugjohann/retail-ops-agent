@@ -1,13 +1,17 @@
 """Scripted Analyst and Ops models that behave as a good real model should, for eval harness tests.
 
 For a stockout risk the Analyst looks up open Reorders with its read-only tool, blames a demand surge
-and recommends a Reorder only when none is open. For any other kind it states that kind's planted
-cause and recommends an alert. The Ops agent proposes whatever the Investigation recommends.
+and recommends a Reorder only when none is open. For a sales spike it reads the SKU's sales history:
+if the spike's days sold at well under half the usual price a unit, the quantities cannot be single
+units, so it concludes a Data Problem in those days' sales Uploads; otherwise it blames a local price
+cut. For any other kind it states that kind's planted cause and recommends an alert. The Ops agent
+proposes whatever the Investigation recommends.
 """
 
 from __future__ import annotations
 
 import json
+import statistics
 from typing import Any
 
 from pydantic_ai.messages import (
@@ -49,6 +53,24 @@ def _output(info: AgentInfo, args: dict[str, Any]) -> ModelResponse:
     return ModelResponse(parts=[ToolCallPart(info.output_tools[0].name, args)])
 
 
+DATA_PROBLEM_CAUSE = (
+    "A Data Problem: the SKU's quantities on these days are in cases, not single units, so it did not "
+    "really sell more."
+)
+
+
+def _data_problem_days(history: list[dict[str, Any]], spike_days: int) -> list[str]:
+    """The spike's days, if each sold at under half the usual price a unit; otherwise none."""
+    earlier = [d["price_per_unit"] for d in history[:-spike_days] if d["price_per_unit"]]
+    recent = history[-spike_days:]
+    if not earlier or len(recent) < spike_days:
+        return []
+    usual = statistics.median(earlier)
+    if all(d["price_per_unit"] and d["price_per_unit"] < usual / 2 for d in recent):
+        return [d["day"] for d in recent]
+    return []
+
+
 def scripted_eval_analyst(*, cause: str = SURGE_CAUSE, always_reorder: bool = False) -> FunctionModel:
     def analyst(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
         returns = [
@@ -59,6 +81,34 @@ def scripted_eval_analyst(*, cause: str = SURGE_CAUSE, always_reorder: bool = Fa
             if isinstance(part, ToolReturnPart)
         ]
         anomaly = _data(_prompt(messages))
+        if anomaly["kind"] == "sales_spike" and not returns:
+            return ModelResponse(
+                parts=[
+                    ToolCallPart(
+                        "sales_history",
+                        {"sales_channel": anomaly["sales_channel"], "sku": anomaly["sku"], "days": 17},
+                    )
+                ]
+            )
+        if anomaly["kind"] == "sales_spike":
+            days = _data_problem_days(
+                json.loads(returns[0].model_response_str()), len(anomaly["daily_units"])
+            )
+            if days:
+                return _output(
+                    info,
+                    {
+                        "cause": DATA_PROBLEM_CAUSE,
+                        "evidence": [
+                            "Its price a unit fell to a fraction of the usual on exactly these days."
+                        ],
+                        "data_problem": {
+                            "upload_kind": "sales",
+                            "days": days,
+                            "what_is_wrong": f"The quantities of {anomaly['sku']} are in cases, not units.",
+                        },
+                    },
+                )
         if anomaly["kind"] in CAUSES:
             return _output(
                 info,

@@ -49,6 +49,40 @@ COLUMNS: dict[UploadFormat, tuple[str, ...]] = {
     UploadFormat.ONLINE_SHOP_STOCK_SNAPSHOT: ONLINE_SHOP_STOCK_SNAPSHOT_COLUMNS,
 }
 
+# Per format: the column holding each row's SKU, and its quantity (units sold, or units on hand).
+SKU_COLUMN: dict[UploadFormat, str] = {
+    UploadFormat.STORE_SALES: "sku",
+    UploadFormat.STORE_INVENTORY: "sku",
+    UploadFormat.ONLINE_SHOP_ORDER_LINES: "sku",
+    UploadFormat.ONLINE_SHOP_STOCK_SNAPSHOT: "SKU Code",
+}
+QUANTITY_COLUMN: dict[UploadFormat, str] = {
+    UploadFormat.STORE_SALES: "quantity_sold",
+    UploadFormat.STORE_INVENTORY: "on_hand",
+    UploadFormat.ONLINE_SHOP_ORDER_LINES: "quantity",
+    UploadFormat.ONLINE_SHOP_STOCK_SNAPSHOT: "Available Quantity",
+}
+
+
+def rows_of_sku(content: str, upload_format: UploadFormat, sku: str) -> list[int]:
+    """The rows of an Upload that are for the SKU, numbered with the header as row 1.
+
+    Read leniently, as a loaded Upload may have needed a Safe Fix: a byte order mark, another
+    delimiter, or spaces around the header and values. Empty if the SKU column cannot be found.
+    """
+    text = content.removeprefix("\ufeff")
+    first_line = text.split("\n", 1)[0]
+    delimiter = next((d for d in (",", ";", "\t", "|") if d in first_line), ",")
+    reader = csv.reader(io.StringIO(text), delimiter=delimiter)
+    header = [cell.strip().lower() for cell in next(reader, list[str]())]
+    column = SKU_COLUMN[upload_format].lower()
+    if column not in header:
+        return []
+    index = header.index(column)
+    return [
+        number for number, row in enumerate(reader, start=2) if index < len(row) and row[index].strip() == sku
+    ]
+
 
 def format_for(sales_channel_kind: SalesChannelKind, kind: UploadKind) -> UploadFormat:
     """The format a Sales Channel uses for an Upload of the given kind."""

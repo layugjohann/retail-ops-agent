@@ -20,7 +20,14 @@ from pydantic_ai.models import Model, infer_model
 from retail_ops_agent.anomalies import AnomalyKind
 from retail_ops_agent.defects import location_in_words
 from retail_ops_agent.erp import InMemoryErp
-from retail_ops_agent.evals.action_graders import ActionsObserved, grade_actions, investigations_of
+from retail_ops_agent.evals.action_graders import (
+    ActionsObserved,
+    PlantedDataProblem,
+    grade_actions,
+    investigations_of,
+    investigations_of_data_problem,
+    planted_data_problems,
+)
 from retail_ops_agent.evals.graders import grade_intake, observe
 from retail_ops_agent.evals.judge import (
     ActualDefect,
@@ -168,10 +175,24 @@ def actual_cause(planted: PlantedAnomaly, open_reorder: int | None) -> str:
     return words
 
 
+def actual_data_problem(planted: PlantedDataProblem) -> str:
+    """A planted Data Problem in words, as the LLM judge is told it."""
+    days = ", ".join(d.isoformat() for d in planted.days)
+    return (
+        f"a Data Problem, not a business event. The sales Uploads from {planted.sales_channel} for "
+        f"{days} reported {planted.sku} in cases instead of single units: each quantity sold is its case "
+        f"pack of {planted.case_pack} times the units really sold, while its net sales are right, so its "
+        "price a unit fell to a fraction of the usual and the other Sales Channels sold it as usual. "
+        "The right conclusion is a Data Problem naming those Uploads, sent back to Intake, with no "
+        "alert or Reorder."
+    )
+
+
 def judge_investigations(
     scenario: Scenario, generated: GeneratedUploads, observed: ActionsObserved, judge_model: Model
 ) -> tuple[InvestigationGrade, ...]:
-    """Grade every Investigation of a planted Anomaly against the rubric, telling the judge its cause."""
+    """Grade every Investigation of a planted Anomaly or Data Problem against the rubric, telling the
+    judge its cause."""
     open_reorders = {r.sales_channel: r.quantity for r in scenario.open_reorders}
     investigations = observed.ops_day.investigations()
     return tuple(
@@ -182,6 +203,10 @@ def judge_investigations(
         )
         for planted in generated.ground_truth.anomalies
         for investigation in investigations_of(planted, investigations)
+    ) + tuple(
+        judge_investigation(investigation, actual_cause=actual_data_problem(problem), model=judge_model)
+        for problem in planted_data_problems(generated)
+        for investigation in investigations_of_data_problem(problem, investigations)
     )
 
 

@@ -29,6 +29,7 @@ DEFECT_NAMES: Mapping[DefectKind, str] = MappingProxyType(
         DefectKind.STRAY_WHITESPACE: "Spaces around a value",
         DefectKind.WRONG_DELIMITER: "Values not separated by commas",
         DefectKind.BYTE_ORDER_MARK: "Byte order mark",
+        DefectKind.UNITS_IN_CASES: "Quantity not in units",
     }
 )
 
@@ -65,6 +66,10 @@ FIXES: Mapping[DefectKind, str] = MappingProxyType(
         DefectKind.STRAY_WHITESPACE: "Remove the spaces around the value.",
         DefectKind.WRONG_DELIMITER: "Save the file as a comma-separated CSV.",
         DefectKind.BYTE_ORDER_MARK: "Save the file as UTF-8 without a byte order mark.",
+        DefectKind.UNITS_IN_CASES: (
+            "Report every quantity as the number of single units, as your usual export does, with no "
+            "conversion to or from cases or case packs, and check any other day sent the same way."
+        ),
     }
 )
 
@@ -78,9 +83,32 @@ def quarantine_message(upload: Upload, defects: list[Defect], note: str | None =
 
     The Intake agent's own note, if any, is included as written but never replaces the list.
     """
-    lines = [
+    return _message(
+        upload,
         f"Your {upload.kind.value} Upload for {upload.sales_channel} on {upload.day.isoformat()} "
         f"({upload.upload_id}) is in Quarantine, so none of its rows are in the BI data yet.",
+        defects,
+        note,
+    )
+
+
+def data_problem_message(upload: Upload, defects: list[Defect]) -> str:
+    """The message to the Uploader of an Upload sent back to Intake by a Data Problem: it passed
+    validation and was loaded, but an Investigation found it wrong, so it is now in Quarantine."""
+    return _message(
+        upload,
+        f"Your {upload.kind.value} Upload for {upload.sales_channel} on {upload.day.isoformat()} "
+        f"({upload.upload_id}) passed our checks, but looking into an unusual pattern in the figures "
+        "showed it is not right. It is now in Quarantine, and its rows have been taken out of the BI "
+        "data.",
+        defects,
+        None,
+    )
+
+
+def _message(upload: Upload, opening: str, defects: list[Defect], note: str | None) -> str:
+    lines = [
+        opening,
         "",
         "Please correct the following and resend the whole file for the same day; it will replace this one.",
         "",

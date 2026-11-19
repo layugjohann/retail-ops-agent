@@ -83,7 +83,8 @@ INVESTIGATION_RUBRIC: tuple[Criterion, ...] = (
         id="recommends_specific_action",
         text="Recommends a specific next Action for this SKU or Sales Channel that follows from the "
         "cause: for a Reorder, roughly how much and why; for an alert, what the person alerted "
-        "should check or do.",
+        "should check or do. For a Data Problem, it instead names which days' Uploads are wrong and "
+        "what is wrong in them, and recommends no business Action.",
     ),
     Criterion(
         id="plain_language",
@@ -233,13 +234,24 @@ def investigation_prompt(
     criteria = "\n".join(f"- {c.id}: {c.text}" for c in rubric)
     evidence = "\n".join(f"- {e}" for e in investigation.evidence)
     action = investigation.recommended_action
+    problem = investigation.data_problem
+    if problem is not None:
+        days = ", ".join(d.isoformat() for d in problem.days)
+        conclusion = (
+            f"Conclusion: Data Problem in the {problem.upload_kind.value} Uploads of {days}: "
+            f"{problem.what_is_wrong}"
+        )
+    elif action is not None:
+        conclusion = f"Recommended Action ({action.kind.value}): {action.description}"
+    else:
+        conclusion = "Recommended Action: none"
     return (
         f"Rubric:\n{criteria}\n\n"
         f"The Anomaly's statistics: {investigation.anomaly.summary}.\n"
         f"Its actual cause: {actual_cause}\n\n"
         "The Investigation to grade, between the markers:\n"
         f"<<<INVESTIGATION\nCause: {investigation.cause}\n\nEvidence:\n{evidence}\n\n"
-        f"Recommended Action ({action.kind.value}): {action.description}\nINVESTIGATION>>>"
+        f"{conclusion}\nINVESTIGATION>>>"
     )
 
 

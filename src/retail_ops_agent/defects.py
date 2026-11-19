@@ -22,6 +22,9 @@ class DefectKind(StrEnum):
     STRAY_WHITESPACE = "stray_whitespace"
     WRONG_DELIMITER = "wrong_delimiter"
     BYTE_ORDER_MARK = "byte_order_mark"
+    # Quantities counted in cases where units were due. Every value still looks plausible, so
+    # validation passes it on purpose; an Investigation catches it later as a Data Problem.
+    UNITS_IN_CASES = "units_in_cases"
 
 
 # Which Defect kinds have a Safe Fix. This table decides, never the model. A kind is here as True
@@ -48,8 +51,15 @@ SAFE_FIX_TABLE: Mapping[DefectKind, bool] = MappingProxyType(
         DefectKind.WRONG_DELIMITER: True,
         # A UTF-8 byte order mark before the header is removed.
         DefectKind.BYTE_ORDER_MARK: True,
+        # Which quantities are in cases, and with what case pack, is the Uploader's to say.
+        DefectKind.UNITS_IN_CASES: False,
     }
 )
+
+
+# The Defect kind an Upload sent back to Intake by a Data Problem is recorded with: the one kind
+# validation passes on purpose, so only an Investigation can catch it.
+DATA_PROBLEM_DEFECT = DefectKind.UNITS_IN_CASES
 
 
 def has_safe_fix(kind: DefectKind) -> bool:
