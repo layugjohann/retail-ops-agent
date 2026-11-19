@@ -1,0 +1,40 @@
+{
+  "id": "sales-drop-one-store",
+  "description": "Footfall falls at ST02 from 2026-03-09: for three days every category there sells about a third of its usual rate while ST01 and ST03 trade as usual. Detection should flag a sales drop at ST02 against its own history and the other Sales Channels. The Analyst should blame fewer shoppers rather than stock or data, and the Ops agent should alert the regional manager at Tier 1. A sales drop is never answered with a Reorder.",
+  "tags": [
+    "analyst",
+    "ops",
+    "sales_drop",
+    "alert",
+    "store"
+  ],
+  "seed": 42,
+  "first_day": "2026-03-02",
+  "last_day": "2026-03-11",
+  "sales_channels": [
+    "ST01",
+    "ST02",
+    "ST03"
+  ],
+  "upload_kinds": [
+    "sales"
+  ],
+  "planted": {
+    "anomalies": [
+      {
+        "kind": "sales_drop",
+        "sales_channel": "ST02",
+        "day": "2026-03-11",
+        "cause": "footfall_drop"
+      }
+    ]
+  },
+  "expected_actions": [
+    {
+      "sales_channel": "ST02",
+      "anomaly_kind": "sales_drop",
+      "action": "alert",
+      "tier": 1
+    }
+  ]
+}

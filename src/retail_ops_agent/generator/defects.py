@@ -1,6 +1,6 @@
 """Plants Defects in generated Uploads and records each one in a ground-truth record (ADR 0005).
 
-The ground truth also records the Anomalies planted in the history the Uploads come from.
+The ground truth also records the Anomalies and lookalikes planted in the history the Uploads come from.
 
 Every planted Defect is placed by a random generator seeded from the catalog seed and the plan, so
 the same plan always gives the same Uploads and the same ground truth.
@@ -20,7 +20,7 @@ from pydantic import BaseModel, ConfigDict
 
 from retail_ops_agent.catalog import SalesChannelKind
 from retail_ops_agent.defects import DefectKind, has_safe_fix
-from retail_ops_agent.generator.anomalies import PlantedAnomaly
+from retail_ops_agent.generator.anomalies import PlantedAnomaly, PlantedLookalike
 from retail_ops_agent.generator.formats import upload_csv
 from retail_ops_agent.generator.history import History
 from retail_ops_agent.generator.resubmissions import PlantedResubmission, ResubmissionPlan, resubmission_csv
@@ -140,6 +140,7 @@ class GroundTruth(BaseModel):
     defects: tuple[PlantedDefect, ...]
     resubmissions: tuple[PlantedResubmission, ...] = ()
     anomalies: tuple[PlantedAnomaly, ...] = ()
+    lookalikes: tuple[PlantedLookalike, ...] = ()
 
     def write(self, path: Path) -> None:
         path.write_text(self.model_dump_json(indent=2), encoding="utf-8")
@@ -246,6 +247,7 @@ def generate_uploads(
             defects=tuple(planted),
             resubmissions=tuple(planted_resubmissions),
             anomalies=history.planted_anomalies,
+            lookalikes=history.planted_lookalikes,
         ),
         _planted=planted_contents,
         _resubmitted=resubmitted,

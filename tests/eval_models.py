@@ -1,7 +1,8 @@
 """Scripted Analyst and Ops models that behave as a good real model should, for eval harness tests.
 
-The Analyst looks up open Reorders with its read-only tool, blames a demand surge and recommends a
-Reorder only when none is open. The Ops agent proposes whatever the Investigation recommends.
+For a stockout risk the Analyst looks up open Reorders with its read-only tool, blames a demand surge
+and recommends a Reorder only when none is open. For any other kind it states that kind's planted
+cause and recommends an alert. The Ops agent proposes whatever the Investigation recommends.
 """
 
 from __future__ import annotations
@@ -20,6 +21,11 @@ from pydantic_ai.messages import (
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 SURGE_CAUSE = "A demand surge: the SKU sold far above its usual rate over the last few days."
+CAUSES = {
+    "sales_drop": "Footfall fell: every category sold well under its usual rate at this Store only.",
+    "sales_spike": "A local price cut: the SKU sold at a discount here only, so it sold far more.",
+    "slow_mover": "Demand for the SKU faded: it has all but stopped selling here while stock sits.",
+}
 
 
 def _prompt(messages: list[ModelMessage]) -> str:
@@ -52,8 +58,20 @@ def scripted_eval_analyst(*, cause: str = SURGE_CAUSE, always_reorder: bool = Fa
             for part in m.parts
             if isinstance(part, ToolReturnPart)
         ]
+        anomaly = _data(_prompt(messages))
+        if anomaly["kind"] in CAUSES:
+            return _output(
+                info,
+                {
+                    "cause": CAUSES[anomaly["kind"]] if cause == SURGE_CAUSE else cause,
+                    "evidence": ["Units a day well away from the usual rate, at this Sales Channel only."],
+                    "recommended_action": {
+                        "kind": "reorder" if always_reorder else "alert",
+                        "description": "Tell whoever handles this what the data shows.",
+                    },
+                },
+            )
         if not returns:
-            anomaly = _data(_prompt(messages))
             return ModelResponse(
                 parts=[
                     ToolCallPart(

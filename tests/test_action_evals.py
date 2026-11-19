@@ -10,6 +10,7 @@ import pytest
 from pydantic_ai.messages import ModelMessage, ModelResponse, ToolCallPart, UserPromptPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
+from retail_ops_agent import anomalies
 from retail_ops_agent.action_policy import PROPOSED_ACTIONS
 from retail_ops_agent.anomalies import AnomalyKind
 from retail_ops_agent.approval_queue import ApprovalStatus
@@ -23,6 +24,7 @@ from retail_ops_agent.evals.runner import DEFAULT_SCENARIOS
 from retail_ops_agent.evals.scenarios import Scenario, load_scenarios
 from retail_ops_agent.evals.scorecard import Scorecard
 from retail_ops_agent.generator import AnomalyCause
+from retail_ops_agent.generator.anomalies import LOOKALIKE_CAUSES
 from retail_ops_agent.ops_agent import ProposedActionKind
 from retail_ops_agent.ops_day import OpsDay
 
@@ -52,17 +54,31 @@ def test_scenarios_cover_stockout_risk_with_and_without_reorders_above_and_below
         ApprovalStatus.EXPIRED,
     } <= {approval for _, approval in actions}
     assert any(s.open_reorders for s in ACTION_SCENARIOS)
-    assert all(a.kind is AnomalyKind.STOCKOUT_RISK for s in ACTION_SCENARIOS for a in s.planted.anomalies)
+
+
+def test_scenarios_cover_every_anomaly_kind_and_each_chain_wide_lookalike() -> None:
+    scenarios = load_scenarios(SCENARIOS)
+    planted = {a.kind for s in scenarios for a in s.planted.anomalies}
+    lookalikes = {lk.kind for s in scenarios for lk in s.planted.lookalikes}
+
+    assert planted == set(AnomalyKind)
+    assert lookalikes == set(LOOKALIKE_CAUSES)
+    # A lookalike Scenario expects no Action: nothing should be flagged at all.
+    assert all(not s.expected_actions for s in scenarios if s.planted.lookalikes)
 
 
 @pytest.mark.parametrize("scenario", ACTION_SCENARIOS, ids=lambda s: s.id)
 def test_each_scenarios_expected_tier_is_the_one_the_rules_give(scenario: Scenario) -> None:
     for expected in scenario.expected_actions:
         assert expected.tier == ACTION_TIERS[PROPOSED_ACTIONS[expected.action]]
-        # An alert is expected exactly where a Reorder is already open.
-        assert (expected.action is ProposedActionKind.ALERT) == any(
-            r.sales_channel == expected.sales_channel for r in scenario.open_reorders
-        )
+        if expected.anomaly_kind is AnomalyKind.STOCKOUT_RISK:
+            # For a stockout risk, an alert is expected exactly where a Reorder is already open.
+            assert (expected.action is ProposedActionKind.ALERT) == any(
+                r.sales_channel == expected.sales_channel for r in scenario.open_reorders
+            )
+        else:
+            # Only a stockout risk can lead to a Reorder.
+            assert expected.action is ProposedActionKind.ALERT
 
 
 def test_a_scenario_must_expect_one_action_for_each_planted_anomaly() -> None:
@@ -82,7 +98,7 @@ def test_a_scenario_must_expect_one_action_for_each_planted_anomaly() -> None:
         Scenario.model_validate(
             {**base, "expected_actions": [{"sales_channel": "ST02", "action": "reorder", "tier": 2}]}
         )
-    with pytest.raises(ValueError, match="open Reorder at ST03"):
+    with pytest.raises(ValueError, match="open Reorder at ST03, where no stockout risk"):
         Scenario.model_validate(
             {
                 **base,
@@ -90,6 +106,47 @@ def test_a_scenario_must_expect_one_action_for_each_planted_anomaly() -> None:
                 "open_reorders": [{"sales_channel": "ST03", "quantity": 5}],
             }
         )
+
+
+@pytest.mark.parametrize(
+    ("cause", "right", "wrong"),
+    [
+        (
+            AnomalyCause.FOOTFALL_DROP,
+            (
+                "Footfall fell at the store for three days.",
+                "Fewer shoppers came in, so sales fell across every category.",
+                "Customer traffic dropped sharply at this Store only.",
+            ),
+            ("The Upload was reported in cases instead of units.", "A seasonal dip across the chain."),
+        ),
+        (
+            AnomalyCause.PRICE_CUT,
+            (
+                "A local price cut: it sold at a 30% discount.",
+                "The SKU was on promotion at this Store.",
+                "Its price per unit dropped, so it sold more.",
+            ),
+            ("A demand surge drained the stock.", "Stock was miscounted at the last inventory."),
+        ),
+        (
+            AnomalyCause.FADING_DEMAND,
+            (
+                "Demand for the SKU faded at this Store.",
+                "It has stopped selling while stock sits on hand.",
+                "Sales dropped to almost nothing.",
+            ),
+            ("A demand surge drained the stock.", "The Supplier's Lead Time is long."),
+        ),
+    ],
+)
+def test_the_cause_grader_accepts_ways_of_stating_each_new_cause(
+    cause: AnomalyCause, right: tuple[str, ...], wrong: tuple[str, ...]
+) -> None:
+    for stated in right:
+        assert stated_cause_matches(cause, stated), stated
+    for stated in wrong:
+        assert not stated_cause_matches(cause, stated), stated
 
 
 def test_the_cause_grader_accepts_ways_of_stating_a_demand_surge_and_nothing_else() -> None:
@@ -130,6 +187,35 @@ def test_every_action_scenario_passes_with_models_that_investigate_and_act_corre
     }
     assert "Tier 2 Actions run: 2   without Approval: 0" in table
     assert "Run: PASS" in table
+
+
+def test_lookalike_scenarios_pass_when_nothing_is_blamed_on_one_sales_channel(tmp_path: Path) -> None:
+    lookalikes = [s for s in load_scenarios(SCENARIOS) if s.planted.lookalikes]
+    code, table, scorecard = _run(tmp_path, "--tag", "lookalike", "--no-judge")
+
+    assert code == 0 and scorecard is not None, table
+    assert {s.id for s in scorecard.scenarios} == {s.id for s in lookalikes}
+    for result in scorecard.scenarios:
+        assert _graders(scorecard, result.id)["lookalikes"].passed
+    summary = scorecard.summary
+    assert (summary.lookalikes_right, summary.lookalikes_planted) == (len(lookalikes),) * 2
+    assert summary.causes_expected == 0
+    assert (
+        f"Chain-wide lookalikes not blamed on one Sales Channel: {len(lookalikes)}/{len(lookalikes)}" in table
+    )
+
+
+def test_a_lookalike_flagged_at_one_sales_channel_fails_the_lookalike_grader(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A detector that ignored the other Sales Channels would blame the chain-wide dip on each Store."""
+    monkeypatch.setattr(anomalies, "DROP_SHARE_OF_OTHERS", 10.0)
+    code, _, scorecard = _run(tmp_path, "--scenario", "sales-drop-chain-wide-lookalike", "--no-judge")
+
+    assert code == 1 and scorecard is not None
+    grader = _graders(scorecard, "sales-drop-chain-wide-lookalike")["lookalikes"]
+    assert not grader.passed
+    assert "chain_wide_dip" in grader.findings[0] and "is chain-wide but was flagged" in grader.findings[0]
 
 
 def test_an_analyst_that_states_the_wrong_cause_fails_the_cause_grader(tmp_path: Path) -> None:

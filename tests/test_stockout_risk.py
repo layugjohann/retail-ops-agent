@@ -9,7 +9,7 @@ from pydantic_ai.models import Model
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from retail_ops_agent.action_policy import ALERT_RECIPIENT
-from retail_ops_agent.anomalies import AnomalyKind
+from retail_ops_agent.anomalies import AnomalyKind, StockoutRisk
 from retail_ops_agent.audit_log import ActionTier, AuditAction
 from retail_ops_agent.catalog import Catalog
 from retail_ops_agent.clock import SimulatedClock
@@ -86,9 +86,11 @@ def test_a_planted_stockout_risk_is_flagged_investigated_and_alerted_at_tier_1(
     catalog: Catalog, tmp_path: Path, generated: GeneratedUploads
 ) -> None:
     [planted] = generated.ground_truth.anomalies
+    assert planted.sku is not None
     run = Run(catalog, tmp_path, _models()).run(generated)
 
     [anomaly] = run.ops_day.anomalies()
+    assert isinstance(anomaly, StockoutRisk)
     assert (anomaly.kind, anomaly.sales_channel, anomaly.sku) == (
         AnomalyKind.STOCKOUT_RISK,
         SALES_CHANNEL,
@@ -127,6 +129,7 @@ def test_stockout_risk_detection_is_plain_statistics_over_the_accepted_data(
     second = Run(catalog, tmp_path / "second", other_models).run(generated)
 
     [anomaly] = first.ops_day.anomalies()
+    assert isinstance(anomaly, StockoutRisk)
     assert second.ops_day.anomalies() == [anomaly]
     history = generated.history
     on_hand = {r.sku: r.on_hand for r in history.inventory(SALES_CHANNEL, anomaly.day)}
