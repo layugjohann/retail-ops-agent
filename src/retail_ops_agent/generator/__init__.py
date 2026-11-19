@@ -33,6 +33,12 @@ from retail_ops_agent.generator.history import (
     generate_history,
     generate_opening_stock,
 )
+from retail_ops_agent.generator.injections import (
+    INJECTED_QUANTITY,
+    InjectionKind,
+    InjectionPlan,
+    PlantedInjection,
+)
 from retail_ops_agent.generator.resubmissions import (
     PlantedResubmission,
     ResubmissionKind,
@@ -41,6 +47,7 @@ from retail_ops_agent.generator.resubmissions import (
 )
 
 __all__ = [
+    "INJECTED_QUANTITY",
     "PLANTABLE_DEFECTS",
     "AnomalyCause",
     "AnomalyPlan",
@@ -48,12 +55,15 @@ __all__ = [
     "GeneratedUploads",
     "GroundTruth",
     "History",
+    "InjectionKind",
+    "InjectionPlan",
     "InventoryRow",
     "LookalikeCause",
     "LookalikePlan",
     "OrderLine",
     "PlantedAnomaly",
     "PlantedDefect",
+    "PlantedInjection",
     "PlantedLookalike",
     "PlantedResubmission",
     "Restock",

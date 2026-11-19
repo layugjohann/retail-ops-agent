@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from enum import StrEnum
 
+from pydantic import BaseModel, ConfigDict
+
 from retail_ops_agent.catalog import SalesChannelKind
 from retail_ops_agent.defects import Defect, DefectKind
 from retail_ops_agent.safe_fixes import apply_safe_fixes
@@ -48,6 +50,20 @@ COLUMNS: dict[UploadFormat, tuple[str, ...]] = {
     UploadFormat.ONLINE_SHOP_ORDER_LINES: ONLINE_SHOP_ORDER_LINE_COLUMNS,
     UploadFormat.ONLINE_SHOP_STOCK_SNAPSHOT: ONLINE_SHOP_STOCK_SNAPSHOT_COLUMNS,
 }
+
+# Per format: the free-text column an Upload may carry beside its expected columns: a SKU description
+# in a Store's or the Online Shop's stock Uploads, an order note in the Order Line export. Its text is
+# never validated, never loaded into the BI data and never read as an instruction: it reaches a
+# model only as quoted data (see FreeTextCell), so text planted in it can have no effect.
+FREE_TEXT_COLUMNS: dict[UploadFormat, str] = {
+    UploadFormat.STORE_SALES: "description",
+    UploadFormat.STORE_INVENTORY: "description",
+    UploadFormat.ONLINE_SHOP_ORDER_LINES: "note",
+    UploadFormat.ONLINE_SHOP_STOCK_SNAPSHOT: "Description",
+}
+# At most this many free-text cells, each cut to this many characters, are shown to a model.
+MAX_FREE_TEXT_CELLS = 20
+MAX_FREE_TEXT_LENGTH = 300
 
 # Per format: the column holding each row's SKU, and its quantity (units sold, or units on hand).
 SKU_COLUMN: dict[UploadFormat, str] = {
@@ -112,6 +128,16 @@ class StockLine:
     on_hand: int
 
 
+class FreeTextCell(BaseModel):
+    """What an Uploader typed into one free-text cell, held as data. It is never an instruction."""
+
+    model_config = ConfigDict(frozen=True)
+
+    row: int
+    column: str
+    text: str
+
+
 @dataclass
 class ParsedUpload:
     format: UploadFormat
@@ -123,6 +149,10 @@ class ParsedUpload:
     safe_fixed: list[Defect] = field(default_factory=list[Defect])
     sales: list[SalesLine] = field(default_factory=list[SalesLine])
     stock: list[StockLine] = field(default_factory=list[StockLine])
+    # The non-empty free-text cells (at most MAX_FREE_TEXT_CELLS, each cut to MAX_FREE_TEXT_LENGTH),
+    # and how many more there were.
+    free_text: list[FreeTextCell] = field(default_factory=list[FreeTextCell])
+    free_text_omitted: int = 0
 
 
 def parse_upload(
@@ -133,7 +163,7 @@ def parse_upload(
     Sales and stock lines are only meaningful when no Defects without a Safe Fix were found.
     """
     upload_format = format_for(sales_channel_kind, upload.kind)
-    fixes = apply_safe_fixes(upload.content, COLUMNS[upload_format])
+    fixes = apply_safe_fixes(upload.content, COLUMNS[upload_format], (FREE_TEXT_COLUMNS[upload_format],))
     reader = csv.DictReader(io.StringIO(fixes.content))
     parsed = ParsedUpload(
         format=upload_format, columns=list(reader.fieldnames or []), safe_fixed=list(fixes.fixed)
@@ -145,6 +175,7 @@ def parse_upload(
         )
     rows = list(reader)
     parsed.row_count = len(rows)
+    parsed.free_text, parsed.free_text_omitted = _free_text(FREE_TEXT_COLUMNS[upload_format], rows)
     if missing:
         return parsed
     swapped = _swapped_columns(upload, upload_format, rows, known_skus)
@@ -174,6 +205,16 @@ def parse_upload(
 
     parsed.sales = _daily_totals(paid) if upload_format is UploadFormat.ONLINE_SHOP_ORDER_LINES else paid
     return parsed
+
+
+def _free_text(column: str, rows: list[dict[str, str]]) -> tuple[list[FreeTextCell], int]:
+    """The non-empty cells of the free-text column, row 1 being the header, and how many are left out."""
+    cells = [
+        FreeTextCell(row=number, column=column, text=text[:MAX_FREE_TEXT_LENGTH])
+        for number, cells in enumerate(rows, start=2)
+        if (text := (cells.get(column) or "").strip())
+    ]
+    return cells[:MAX_FREE_TEXT_CELLS], max(0, len(cells) - MAX_FREE_TEXT_CELLS)
 
 
 class _ColumnType(StrEnum):
