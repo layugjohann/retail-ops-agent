@@ -1,0 +1,28 @@
+# Local n8n for the scheduled Ops Day trigger. n8n only triggers and forwards: every rule lives in
+# tested code behind the Ops Day boundary, served by `make trigger` on the host. See README.md.
+#
+#   docker compose -f n8n/docker-compose.yml up -d     # n8n on http://localhost:5678
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:${N8N_VERSION:-latest}
+    ports:
+      - "127.0.0.1:5678:5678"
+    environment:
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-UTC}
+      TZ: ${GENERIC_TIMEZONE:-UTC}
+      # The workflow reads the two URLs below from the environment.
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      # Where the Ops Day trigger (make trigger) listens on the host.
+      OPS_DAY_URL: ${OPS_DAY_URL:-http://host.docker.internal:8765}
+      # Where notifications are forwarded: the trigger's local inbox by default, or a Slack or Teams
+      # incoming webhook that accepts {"text": "..."}.
+      NOTIFY_WEBHOOK_URL: ${NOTIFY_WEBHOOK_URL:-http://host.docker.internal:8765/inbox}
+    extra_hosts:
+      # Lets Linux reach the host the way Docker Desktop does.
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./workflows:/workflows:ro
+
+volumes:
+  n8n_data:

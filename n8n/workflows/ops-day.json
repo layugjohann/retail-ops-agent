@@ -1,0 +1,95 @@
+{
+  "id": "cobaltHomeOpsDay",
+  "name": "Cobalt Home: scheduled Ops Day",
+  "active": false,
+  "nodes": [
+    {
+      "id": "8b3c2a5e-1f40-4c1e-9a3b-0d6f2f6b7a01",
+      "name": "Every evening",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 22
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "8b3c2a5e-1f40-4c1e-9a3b-0d6f2f6b7a02",
+      "name": "Run now",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 200],
+      "parameters": {}
+    },
+    {
+      "id": "8b3c2a5e-1f40-4c1e-9a3b-0d6f2f6b7a03",
+      "name": "Run Ops Day",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [240, 100],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.OPS_DAY_URL }}/ops-day/run",
+        "options": {
+          "timeout": 900000
+        }
+      }
+    },
+    {
+      "id": "8b3c2a5e-1f40-4c1e-9a3b-0d6f2f6b7a04",
+      "name": "Each notification",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [480, 100],
+      "parameters": {
+        "fieldToSplitOut": "notifications",
+        "options": {}
+      }
+    },
+    {
+      "id": "8b3c2a5e-1f40-4c1e-9a3b-0d6f2f6b7a05",
+      "name": "Forward notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 100],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.NOTIFY_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $json.text }) }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Every evening": {
+      "main": [[{ "node": "Run Ops Day", "type": "main", "index": 0 }]]
+    },
+    "Run now": {
+      "main": [[{ "node": "Run Ops Day", "type": "main", "index": 0 }]]
+    },
+    "Run Ops Day": {
+      "main": [[{ "node": "Each notification", "type": "main", "index": 0 }]]
+    },
+    "Each notification": {
+      "main": [[{ "node": "Forward notification", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}

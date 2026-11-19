@@ -4,12 +4,12 @@
 
 **Blocked by:** 04
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] An entry point n8n can call to run an Ops Day (CLI or local HTTP)
-- [ ] A Docker Compose file for local n8n
-- [ ] Exported workflow JSON committed: scheduled trigger → run Ops Day → forward Uploader messages and alerts
-- [ ] The workflow contains no business rules
-- [ ] README instructions for running it
+- [x] An entry point n8n can call to run an Ops Day (CLI or local HTTP)
+- [x] A Docker Compose file for local n8n
+- [x] Exported workflow JSON committed: scheduled trigger → run Ops Day → forward Uploader messages and alerts
+- [x] The workflow contains no business rules
+- [x] README instructions for running it
 
 ## Comments
