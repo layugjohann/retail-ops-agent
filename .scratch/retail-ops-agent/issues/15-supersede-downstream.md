@@ -5,7 +5,8 @@
 **Blocked by:** 05, 10, 12
 **Stacked on:** issue/14-data-problem-loop
 
-**Status:** in-progress
+**Status:** awaiting-merge
+**Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/14
 
 - [ ] Anomalies that no longer hold after a resubmission are cleared
 - [ ] Dependent Tier 1 Actions are undone through the Audit Log (recorded as new entries)
@@ -26,3 +27,7 @@ Usage: Implementer 58 input, 11,807 output, 76,238 cache creation, 1,796,892 cac
 **Gate passed**: every command exited 0 (log: `.sandcastle/logs/gate-15-2026-11-19T14-53-33-523Z.log`).
 
 Usage: Body writer 2 input, 1,885 output, 51,447 cache creation, 11,842 cache read.
+
+**Pull Request opened**: https://github.com/layugjohann/retail-ops-agent/pull/14
+
+Stacked on Base Issue 14: this Pull Request targets `issue/14-data-problem-loop`, the branch of https://github.com/layugjohann/retail-ops-agent/pull/13. Merge that Pull Request first.
