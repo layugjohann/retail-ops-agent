@@ -4,7 +4,8 @@
 
 **Blocked by:** 09, 12
 
-**Status:** in-progress
+**Status:** awaiting-merge
+**Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/12
 
 - [ ] Deterministic detection for a sales drop at one Sales Channel (compared with its own history and with other Sales Channels), spikes and slow movers
 - [ ] The generator can plant each kind with a cause the data reveals, plus chain-wide lookalikes
@@ -30,3 +31,5 @@ Usage: Implementer unknown; Review Session 36 input, 11,184 output, 100,270 cach
 **Gate passed**: every command exited 0 (log: `.sandcastle/logs/gate-13-2026-11-19T09-39-03-925Z.log`).
 
 Usage: Body writer 2 input, 1,650 output, 82,393 cache creation, 11,842 cache read.
+
+**Pull Request opened**: https://github.com/layugjohann/retail-ops-agent/pull/12
