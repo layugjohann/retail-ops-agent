@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import os
-from datetime import date
+from datetime import date, timedelta
 
 import pandas as pd
 import streamlit as st
@@ -23,6 +23,7 @@ from retail_ops_agent.uploads import UploadKind
 SEED = 7
 FIRST_DAY = date(2026, 11, 1)
 DAYS = 14
+RUN_DAYS = 13
 # Defects planted in the sandbox's Uploads: some with a Safe Fix, so the Audit Log has Safe Fixes to
 # show, and some without, so there are Quarantined Uploads and Uploader messages.
 PLANTED_DEFECTS = [
@@ -48,12 +49,15 @@ RESUBMISSIONS = [
         ("ST01", 10, UploadKind.INVENTORY, ResubmissionKind.CHANGED),
     ]
 ]
-# A demand surge planted at one Store, so there is a stockout risk to investigate and alert on.
+# A demand surge planted at one Store, so there is a stockout risk to investigate and alert on. The
+# risk is flagged before the planted day (on Nov 13); the sandbox runs only through that day, so its
+# Reorder is still in the Approval Queue, not Expired, when the dashboard opens.
 PLANTED_ANOMALIES = [
-    AnomalyPlan(kind=AnomalyKind.STOCKOUT_RISK, sales_channel="ST02", day=date(2026, 11, 12)),
+    AnomalyPlan(kind=AnomalyKind.STOCKOUT_RISK, sales_channel="ST02", day=date(2026, 11, 14)),
 ]
 UNDO_TAKEN_BY = "BI analyst (dashboard)"
 APPROVER = "inventory planner (dashboard)"
+TIME_STEP = timedelta(hours=24)
 
 
 @st.cache_resource
@@ -67,6 +71,7 @@ def _sandbox() -> tuple[OpsDay, str]:
         defects=PLANTED_DEFECTS,
         resubmissions=RESUBMISSIONS,
         anomalies=PLANTED_ANOMALIES,
+        run_days=RUN_DAYS,
     ), label
 
 
@@ -211,8 +216,17 @@ st.header("Approval Queue")
 st.caption(
     "Reorders are Tier 2: each waits here for the inventory planner's yes or no and reaches the ERP "
     "only once approved. A Reorder costing under the Auto-approval Limit of "
-    f"{ops_day.auto_approval_limit:.2f} is approved by rule and recorded in the Audit Log."
+    f"{ops_day.auto_approval_limit:.2f} is approved by rule and recorded in the Audit Log. There is at "
+    "most one pending Reorder per SKU and Sales Channel: a newer Investigation's Reorder replaces it. "
+    "A pending Action Expires 48 simulated hours after it was queued."
 )
+time_column, advance_column = st.columns(2)
+time_column.markdown(f"**Simulated time:** {ops_day.now():%Y-%m-%d %H:%M}")
+if advance_column.button("Advance simulated time 24 hours", key="advance-time"):
+    expired = ops_day.advance_time(TIME_STEP)
+    if expired:
+        st.warning("Expired: " + ", ".join(e.action_id for e in expired))
+    st.rerun()
 causes = {i.investigation_id: i.cause for i in investigations}
 queue = ops_day.approval_queue()
 if not queue:
@@ -224,6 +238,7 @@ else:
                 {
                     "Action": q.action_id,
                     "queued at": q.queued_at,
+                    "expires at": q.expires_at,
                     "Investigation": q.investigation_id,
                     "cause": causes.get(q.investigation_id, ""),
                     "Sales Channel": q.sales_channel,
@@ -256,7 +271,7 @@ else:
             if reject_column.button("Reject", key=f"reject-{q.action_id}"):
                 ops_day.reject(q.action_id, rejected_by=APPROVER)
                 st.rerun()
-decided = [r for r in ops_day.reorders() if r.status.value != "pending"]
+decided = ops_day.decided_reorders()
 st.subheader("Decided Reorders")
 if not decided:
     st.info("No Reorders decided yet.")
@@ -276,6 +291,7 @@ else:
                     "decided by": r.decided_by,
                     "decided at": r.decided_at,
                     "ERP Reorder": r.reorder_id or "",
+                    "replaced by": r.replaced_by or "",
                 }
                 for r in decided
             ]

@@ -122,3 +122,18 @@ def test_dashboard_approval_queue_can_reject_a_reorder() -> None:
     assert not app.exception
     assert list(app.dataframe[5].value["decision"]) == ["rejected"]
     assert "reorder" not in set(app.dataframe[-1].value["Action"])
+
+
+@pytest.mark.usefixtures("fresh_sandbox")
+def test_dashboard_advancing_simulated_time_expires_the_pending_reorder() -> None:
+    app = AppTest.from_file(str(APP), default_timeout=120).run()
+    [action_id] = list(app.dataframe[5].value["Action"])
+
+    app.button(key="advance-time").click().run()
+    assert list(app.dataframe[5].value["Action"]) == [action_id]
+    app.button(key="advance-time").click().run()
+
+    assert not app.exception
+    assert any("Nothing waiting for Approval" in i.value for i in app.info)
+    assert list(app.dataframe[5].value["decision"]) == ["expired"]
+    assert "reorder" not in set(app.dataframe[-1].value["Action"])
