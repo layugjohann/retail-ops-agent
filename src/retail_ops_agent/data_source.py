@@ -41,3 +41,16 @@ class CsvDataSource:
             content = meta_path.with_suffix(".csv").read_text(encoding="utf-8")
             uploads.append(Upload.model_validate({**meta, "content": content}))
         return sorted(uploads, key=lambda u: (u.submitted_at, u.upload_id))
+
+
+class InMemoryDataSource:
+    """Keeps Uploads in memory only, so nothing is written to disk (a Live Mode Visitor's sandbox)."""
+
+    def __init__(self) -> None:
+        self._uploads: list[Upload] = []
+
+    def put(self, upload: Upload) -> None:
+        self._uploads.append(upload)
+
+    def uploads_for(self, day: date) -> list[Upload]:
+        return sorted((u for u in self._uploads if u.day == day), key=lambda u: (u.submitted_at, u.upload_id))

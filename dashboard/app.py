@@ -1,7 +1,8 @@
 """Cobalt Home dashboard. Holds no business logic.
 
 Replay Mode, the default, plays back recorded Ops Day outcomes with no model, key or network call.
-Live Mode reads from and calls the Ops Day boundary of a seeded sandbox.
+Live Mode gives each Visitor their own in-memory sandbox and reads from and calls only its Ops Day
+boundary.
 """
 
 # Streamlit's chart and table signatures include an untyped optional dataframe library, which
@@ -11,18 +12,25 @@ Live Mode reads from and calls the Ops Day boundary of a seeded sandbox.
 from __future__ import annotations
 
 import os
-from datetime import date, timedelta
+from datetime import timedelta
 
 import pandas as pd
 import streamlit as st
+from pydantic_ai.exceptions import ModelAPIError
 
-from retail_ops_agent.anomalies import AnomalyKind
 from retail_ops_agent.approval_queue import QueuedReorder
-from retail_ops_agent.defects import DefectKind
-from retail_ops_agent.generator import AnomalyPlan, DefectPlan, ResubmissionKind, ResubmissionPlan
 from retail_ops_agent.hours_saved import HoursSaved
-from retail_ops_agent.models import models_from_environment
-from retail_ops_agent.ops_day import OpsDay
+from retail_ops_agent.live import (
+    DEFAULT_VISITOR_MODELS,
+    SEED,
+    KeyProvider,
+    OwnKeyNeeded,
+    SharedKeyLimit,
+    SharedKeyLimiter,
+    VisitorKey,
+    new_live_sandbox,
+    run_live_day,
+)
 from retail_ops_agent.replay import (
     STAGE_TITLES,
     Recording,
@@ -32,68 +40,141 @@ from retail_ops_agent.replay import (
     replay_step,
     step_count,
 )
-from retail_ops_agent.sandbox import build_sandbox
+from retail_ops_agent.sandbox import Sandbox
 from retail_ops_agent.uploads import UploadKind
 
-SEED = 7
-FIRST_DAY = date(2026, 11, 1)
-DAYS = 14
-RUN_DAYS = 13
-# Defects planted in the sandbox's Uploads: some with a Safe Fix, so the Audit Log has Safe Fixes to
-# show, and some without, so there are Quarantined Uploads and Uploader messages.
-PLANTED_DEFECTS = [
-    DefectPlan(sales_channel=channel, day=date(2026, 11, day), upload_kind=kind, defect_kind=defect)
-    for channel, day, kind, defect in [
-        ("ST02", 3, UploadKind.SALES, DefectKind.RENAMED_COLUMN),
-        ("ONLINE", 5, UploadKind.INVENTORY, DefectKind.WRONG_DELIMITER),
-        ("ST04", 8, UploadKind.INVENTORY, DefectKind.STRAY_WHITESPACE),
-        ("ONLINE", 11, UploadKind.SALES, DefectKind.BYTE_ORDER_MARK),
-        ("ST03", 6, UploadKind.SALES, DefectKind.MISSING_COLUMN),
-        ("ST05", 9, UploadKind.INVENTORY, DefectKind.UNKNOWN_SKU),
-        ("ONLINE", 12, UploadKind.SALES, DefectKind.DUPLICATE_DAY),
-    ]
-]
-# Resubmissions in the sandbox: a corrected one gets a Quarantined Upload accepted, and a changed one
-# revises figures, so the Upload status view has Superseded Uploads to show.
-RESUBMISSIONS = [
-    ResubmissionPlan(
-        sales_channel=channel, day=date(2026, 11, day), upload_kind=kind, resubmission_kind=change
-    )
-    for channel, day, kind, change in [
-        ("ST03", 6, UploadKind.SALES, ResubmissionKind.CORRECTED),
-        ("ST01", 10, UploadKind.INVENTORY, ResubmissionKind.CHANGED),
-    ]
-]
-# A demand surge planted at one Store, so there is a stockout risk to investigate and alert on. The
-# risk is flagged before the planted day (on Nov 13); the sandbox runs only through that day, so its
-# Reorder is still in the Approval Queue, not Expired, when the dashboard opens.
-PLANTED_ANOMALIES = [
-    AnomalyPlan(kind=AnomalyKind.STOCKOUT_RISK, sales_channel="ST02", day=date(2026, 11, 14)),
-]
 UNDO_TAKEN_BY = "BI analyst (dashboard)"
 APPROVER = "inventory planner (dashboard)"
 TIME_STEP = timedelta(hours=24)
+SANDBOX_KEY = "live-sandbox"
+OWN_KEY_NEEDED = "live-own-key-needed"
+LAST_RUN = "live-last-run"
 
 
 @st.cache_resource
-def _sandbox() -> tuple[OpsDay, str]:
-    models, label = models_from_environment(os.environ)
-    return build_sandbox(
-        seed=SEED,
-        models=models,
-        first_day=FIRST_DAY,
-        days=DAYS,
-        defects=PLANTED_DEFECTS,
-        resubmissions=RESUBMISSIONS,
-        anomalies=PLANTED_ANOMALIES,
-        run_days=RUN_DAYS,
-    ), label
+def _shared_key_limiter(limit: SharedKeyLimit) -> SharedKeyLimiter:
+    """One limiter for the whole server, so the shared key's limit holds across every Visitor."""
+    return SharedKeyLimiter(limit)
+
+
+def _sandbox() -> Sandbox:
+    """This Visitor's own sandbox, kept in their session's memory only."""
+    if SANDBOX_KEY not in st.session_state:
+        with st.spinner("Seeding your sandbox of Cobalt Home…"):
+            st.session_state[SANDBOX_KEY] = new_live_sandbox()
+    sandbox: Sandbox = st.session_state[SANDBOX_KEY]
+    return sandbox
+
+
+def _reset() -> None:
+    for key in (SANDBOX_KEY, OWN_KEY_NEEDED, LAST_RUN):
+        st.session_state.pop(key, None)
+
+
+def _visitor_key(reason: str) -> VisitorKey | None:
+    """Ask for the Visitor's own key. It stays in this browser session's widgets only: it is never
+    written to disk, logged, cached or recorded in the Audit Log."""
+    st.warning(
+        f"{reason} Your key is used only for the Ops Days you run in this session and is never stored."
+    )
+    provider_column, model_column = st.columns(2)
+    provider = provider_column.selectbox("Provider", list(KeyProvider), key="visitor-provider")
+    model_name = model_column.text_input(
+        "Model", value=DEFAULT_VISITOR_MODELS[provider], key=f"visitor-model-{provider.name}"
+    )
+    api_key = st.text_input("Your API key", type="password", key="visitor-key")
+    if not api_key.strip():
+        return None
+    return VisitorKey(provider=provider, api_key=api_key.strip(), model_name=model_name.strip() or None)
+
+
+def _sandbox_controls(sandbox: Sandbox) -> None:
+    """Run day, uploading one's own CSV and reset, all through the sandbox's Ops Day boundary."""
+    limiter = _shared_key_limiter(SharedKeyLimit.from_environment(os.environ))
+    st.header("Your sandbox")
+    st.caption(
+        f"Your own copy of Cobalt Home (seed {SEED}), held only in this session's memory: nothing you do "
+        f"is stored on the server or seen by anyone else. Its first {len(sandbox.days_run)} Ops Days were "
+        "run with the offline scripted model; each Ops Day you run uses a real model, first the shared "
+        f"free-tier key (limited to {limiter.limit.describe()} across every Visitor; "
+        f"{limiter.remaining()} left now), then your own key."
+    )
+    last_run = st.session_state.get(LAST_RUN)
+    if last_run:
+        st.success(last_run)
+    reason: str | None = st.session_state.get(OWN_KEY_NEEDED)
+    if reason is None and limiter.remaining() == 0:
+        reason = limiter.limit_reached()
+    needs_own_key = reason is not None
+    visitor_key = _visitor_key(reason) if reason is not None else None
+    next_day = sandbox.next_day
+    run_column, reset_column = st.columns(2)
+    run_label = f"Run day ({next_day})" if next_day else "Every day has run"
+    run = run_column.button(
+        run_label, key="run-day", disabled=next_day is None or (needs_own_key and visitor_key is None)
+    )
+    if reset_column.button("Reset sandbox", key="reset"):
+        _reset()
+        st.rerun()
+    if run:
+        try:
+            with st.spinner(f"Running the Ops Day for {next_day}…"):
+                result = run_live_day(sandbox, env=os.environ, limiter=limiter, visitor_key=visitor_key)
+        except OwnKeyNeeded as needed:
+            st.session_state[OWN_KEY_NEEDED] = str(needed)
+            st.session_state[LAST_RUN] = None
+            st.rerun()
+        except ModelAPIError as failed:
+            st.error(
+                f"The model could not run the Ops Day ({type(failed).__name__}). Check the key and model, "
+                "then run the day again; its Uploads are kept."
+            )
+        else:
+            outcome = result.outcome
+            st.session_state[LAST_RUN] = (
+                f"Ran the Ops Day for {outcome.day} with {result.model_label}: "
+                f"{len(outcome.uploads)} Uploads, {len(outcome.anomalies)} Anomalies, "
+                f"{len(outcome.reorders)} Reorders proposed, {len(outcome.audit_entries)} Audit Log entries."
+            )
+            st.rerun()
+
+    st.subheader("Upload a CSV of your own")
+    st.caption(
+        "Edit the generated Upload or paste your own, broken or malicious ones included. For the next day "
+        "it takes the place of the generated Upload; for a day already run it is a resubmission that "
+        "Supersedes the earlier Upload when the next Ops Day runs."
+    )
+    days = [*sandbox.days_run, *([next_day] if next_day else [])]
+    channel_column, day_column, kind_column = st.columns(3)
+    channel = channel_column.selectbox("Sales Channel", sandbox.sales_channels, key="own-channel")
+    day = day_column.selectbox("Day", days, index=len(days) - 1, key="own-day")
+    kind = kind_column.selectbox("Kind", list(UploadKind), format_func=lambda k: k.value, key="own-kind")
+    chosen_file = st.file_uploader("CSV file", type=["csv", "txt"], key="own-file")
+    starting = (
+        chosen_file.getvalue().decode("utf-8", errors="replace")
+        if chosen_file is not None
+        else sandbox.generated_upload(channel, day, kind)
+    )
+    file_tag = chosen_file.file_id if chosen_file is not None else "generated"
+    content = st.text_area(
+        "Upload contents", value=starting, height=200, key=f"own-csv-{channel}-{day}-{kind.value}-{file_tag}"
+    )
+    if st.button("Submit Upload", key="submit-own-upload"):
+        try:
+            upload_id = sandbox.submit_own_upload(sales_channel=channel, day=day, kind=kind, content=content)
+        except ValueError as refused:
+            st.error(str(refused))
+        else:
+            st.session_state[LAST_RUN] = f"Submitted {upload_id}; the next Ops Day you run processes it."
+            st.rerun()
 
 
 def _live_mode() -> None:
-    """A seeded sandbox run through the Ops Day boundary, with approve, reject, advance and undo."""
-    ops_day, model_label = _sandbox()
-    st.caption(f"Live Mode: a seeded sandbox, seed {SEED}. Agent model: {model_label}.")
+    """The Visitor's own seeded sandbox run through the Ops Day boundary: Run day, approve, reject,
+    advance, undo, their own CSV and reset."""
+    sandbox = _sandbox()
+    ops_day = sandbox.ops_day
+    _sandbox_controls(sandbox)
 
     st.header("Sales by Sales Channel")
     sales = pd.DataFrame([row.model_dump() for row in ops_day.sales_by_sales_channel()])

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pandas as pd
 import pytest
 import streamlit as st
 from streamlit.testing.v1 import AppTest
@@ -17,8 +18,8 @@ def _live_app() -> AppTest:
 
 @pytest.fixture
 def fresh_sandbox() -> None:
-    """The sandbox is cached for the whole process; a test that decides the Approval Queue's one
-    Reorder needs it undecided."""
+    """Each Visitor's sandbox lives in their own session, but the shared key's limiter is cached for
+    the whole process; start every test that runs a day with it unused."""
     st.cache_resource.clear()
 
 
@@ -161,3 +162,96 @@ def test_dashboard_advancing_simulated_time_expires_the_pending_reorder() -> Non
     assert any("Nothing waiting for Approval" in i.value for i in app.info)
     assert list(app.dataframe[5].value["decision"]) == ["expired"]
     assert "reorder" not in set(app.dataframe[-1].value["Action"])
+
+
+NEXT_DAY = "2026-11-14"
+
+
+def _statuses(app: AppTest) -> pd.DataFrame:
+    [statuses] = [d.value for d in app.dataframe if "history" in d.value.columns]
+    return statuses
+
+
+@pytest.mark.usefixtures("fresh_sandbox")
+def test_live_mode_run_day_processes_the_next_days_uploads() -> None:
+    app = _live_app()
+    assert app.button(key="run-day").label == f"Run day ({NEXT_DAY})"
+    assert NEXT_DAY not in {str(d) for d in _statuses(app)["day"]}
+
+    app.button(key="run-day").click().run()
+
+    assert not app.exception
+    assert any(f"Ran the Ops Day for {NEXT_DAY}" in s.value for s in app.success)
+    assert NEXT_DAY in {str(d) for d in _statuses(app)["day"]}
+    assert app.button(key="run-day").label == "Run day (2026-11-15)"
+
+
+@pytest.mark.usefixtures("fresh_sandbox")
+def test_live_mode_an_uploaded_csv_of_ones_own_goes_through_intake() -> None:
+    app = _live_app()
+    app.selectbox(key="own-channel").set_value("ST01").run()
+    [editor] = [t for t in app.text_area if t.key and t.key.startswith("own-csv-ST01-2026-11-14-sales")]
+    broken = "\n".join(",".join(line.split(",")[:-1]) for line in (editor.value or "").splitlines())
+    editor.input(broken).run()
+
+    app.button(key="submit-own-upload").click().run()
+    assert any("Submitted ST01-2026-11-14-sales-001" in s.value for s in app.success)
+    app.button(key="run-day").click().run()
+
+    assert not app.exception
+    statuses = _statuses(app)
+    [mine] = statuses[statuses["Upload"] == "ST01-2026-11-14-sales-001"].to_dict("records")
+    assert mine["status"] == "quarantined"
+    ours = statuses[(statuses["Sales Channel"] == "ST01") & (statuses["kind"] == "sales")]
+    assert len(ours[ours["day"].astype(str) == NEXT_DAY]) == 1
+
+
+@pytest.mark.usefixtures("fresh_sandbox")
+def test_live_mode_reset_starts_the_sandbox_again() -> None:
+    app = _live_app()
+    [action_id] = list(app.dataframe[5].value["Action"])
+    app.button(key=f"approve-{action_id}").click().run()
+    app.button(key="run-day").click().run()
+    assert app.button(key="run-day").label == "Run day (2026-11-15)"
+
+    app.button(key="reset").click().run()
+
+    assert not app.exception
+    assert app.button(key="run-day").label == f"Run day ({NEXT_DAY})"
+    assert list(app.dataframe[5].value["Action"]) == [action_id]
+
+
+@pytest.mark.usefixtures("fresh_sandbox")
+def test_live_mode_each_visitor_has_their_own_sandbox() -> None:
+    mine, theirs = _live_app(), _live_app()
+    [action_id] = list(mine.dataframe[5].value["Action"])
+
+    mine.button(key=f"approve-{action_id}").click().run()
+    mine.button(key="run-day").click().run()
+    theirs.run()
+
+    assert list(mine.dataframe[5].value["decision"]) == ["approved"]
+    assert list(theirs.dataframe[5].value["Action"]) == [action_id]
+    assert theirs.button(key="run-day").label == f"Run day ({NEXT_DAY})"
+
+
+@pytest.mark.usefixtures("fresh_sandbox")
+def test_live_mode_asks_for_the_visitors_own_key_once_the_shared_limit_is_reached(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LIVE_SHARED_RUNS", "1")
+    app = _live_app()
+    assert not [t for t in app.text_input if t.key == "visitor-key"]
+
+    app.button(key="run-day").click().run()
+
+    assert not app.exception
+    assert any("limit of 1 Ops Day every 24 hours is reached" in w.value for w in app.warning)
+    assert app.text_input(key="visitor-key").value == ""
+    assert app.button(key="run-day").disabled
+
+    app.text_input(key="visitor-key").input("gsk-visitor-secret").run()
+
+    assert not app.button(key="run-day").disabled
+    shown = " ".join(str(e.value) for e in [*app.markdown, *app.caption, *app.success, *app.warning])
+    assert "gsk-visitor-secret" not in shown
