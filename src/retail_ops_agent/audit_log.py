@@ -31,6 +31,9 @@ class AuditAction(StrEnum):
     # A newer Investigation's Reorder took the place of the pending Reorder for the same SKU and
     # Sales Channel in the Approval Queue.
     REPLACE_REORDER = "replace_reorder"
+    # A pending Reorder taken out of the Approval Queue because the Anomaly it answered no longer
+    # holds once an Upload it was built on was Superseded.
+    WITHDRAW_REORDER = "withdraw_reorder"
     UNDO = "undo"
 
 
@@ -41,6 +44,7 @@ ACTION_TIERS: dict[AuditAction, ActionTier] = {
     AuditAction.ALERT: ActionTier.INTERNAL,
     AuditAction.REORDER: ActionTier.EXTERNAL,
     AuditAction.REPLACE_REORDER: ActionTier.INTERNAL,
+    AuditAction.WITHDRAW_REORDER: ActionTier.INTERNAL,
     AuditAction.UNDO: ActionTier.INTERNAL,
 }
 
@@ -59,7 +63,8 @@ class UndoOperation(StrEnum):
     CANCEL_REORDER = "cancel_reorder"
     # Not undone from the Audit Log. A replaced Reorder is never put back in the Approval Queue, which
     # would make two pending Reorders for one SKU and Sales Channel; the replacing Reorder is the
-    # current recommendation, and a person who disagrees with it rejects it.
+    # current recommendation, and a person who disagrees with it rejects it. A withdrawn Reorder is
+    # never put back either: the Anomaly it answered no longer holds.
     NOT_UNDOABLE = "not_undoable"
     # Reinstate the entry an undo reversed.
     REINSTATE_ENTRY = "reinstate_entry"

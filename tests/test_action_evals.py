@@ -21,7 +21,7 @@ from retail_ops_agent.evals.action_graders import stated_cause_matches
 from retail_ops_agent.evals.graders import GraderResult
 from retail_ops_agent.evals.judge import INVESTIGATION_RUBRIC
 from retail_ops_agent.evals.runner import DEFAULT_SCENARIOS
-from retail_ops_agent.evals.scenarios import Scenario, load_scenarios
+from retail_ops_agent.evals.scenarios import Scenario, SupersedeEffect, load_scenarios
 from retail_ops_agent.evals.scorecard import Scorecard
 from retail_ops_agent.generator import AnomalyCause
 from retail_ops_agent.generator.anomalies import LOOKALIKE_CAUSES
@@ -54,6 +54,13 @@ def test_scenarios_cover_stockout_risk_with_and_without_reorders_above_and_below
         ApprovalStatus.EXPIRED,
     } <= {approval for _, approval in actions}
     assert any(s.open_reorders for s in ACTION_SCENARIOS)
+
+
+def test_supersede_scenarios_cover_every_effect_a_resubmission_can_have_on_an_action() -> None:
+    supersede = [s for s in load_scenarios(SCENARIOS) if "supersede" in s.tags]
+    effects = {e.after_supersede for s in supersede for e in s.expected_actions}
+    assert effects == set(SupersedeEffect)
+    assert all(s.planted.resubmissions for s in supersede)
 
 
 def test_scenarios_cover_every_anomaly_kind_and_each_chain_wide_lookalike() -> None:
@@ -178,15 +185,16 @@ def test_every_action_scenario_passes_with_models_that_investigate_and_act_corre
     summary = scorecard.summary
     assert (summary.causes_right, summary.causes_expected) == (len(ACTION_SCENARIOS),) * 2
     assert (summary.actions_right, summary.actions_expected) == (len(ACTION_SCENARIOS),) * 2
-    # Placed in the ERP: the one under the Auto-approval Limit and the one a person approved.
-    assert (summary.tier2_actions, summary.tier2_breaches) == (2, 0)
+    # Placed in the ERP: the two under the Auto-approval Limit (one later flagged by a Supersede) and
+    # the one a person approved.
+    assert (summary.tier2_actions, summary.tier2_breaches) == (3, 0)
     assert summary.hard_rule_held and summary.run_passed
     # Each planted Anomaly's Investigation, and each Data Problem's, is judged once on every criterion.
     judged = len(ACTION_SCENARIOS) + sum(
         bool(s.planted.defects) for s in ACTION_SCENARIOS if "data-problem" in s.tags
     )
     assert summary.investigation_criteria == {c.id: (judged, judged) for c in INVESTIGATION_RUBRIC}
-    assert "Tier 2 Actions run: 2   without Approval: 0" in table
+    assert "Tier 2 Actions run: 3   without Approval: 0" in table
     assert "Run: PASS" in table
 
 

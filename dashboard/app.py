@@ -305,6 +305,45 @@ else:
         ),
         hide_index=True,
     )
+flagged = ops_day.flagged_reorders()
+st.subheader("Flagged after a Supersede")
+st.caption(
+    "When a resent Upload replaces one an Anomaly was built on, the Anomaly is checked again. If it no "
+    "longer holds, its Tier 1 Actions are undone through the Audit Log and its pending Reorder is "
+    "withdrawn from the Approval Queue. A Reorder already placed with the Supplier is never undone "
+    "automatically: it is flagged here for the inventory planner, who can cancel it by undoing its "
+    "Audit Log entry."
+)
+if not flagged:
+    st.info("No placed Reorders flagged.")
+else:
+    st.dataframe(
+        pd.DataFrame(
+            [
+                {
+                    "Action": f.action_id,
+                    "ERP Reorder": f.reorder_id,
+                    "Audit Log entry": f.audit_entry_id,
+                    "Sales Channel": f.sales_channel,
+                    "SKU": f.sku,
+                    "quantity": f.quantity,
+                    "Supplier": f.supplier_name,
+                    "cost": f.cost,
+                    "flagged at": f.flagged_at,
+                    "Superseded Upload": f.superseded_upload_id,
+                    "replaced by": f.replaced_by,
+                    "why": f.reason,
+                }
+                for f in flagged
+            ]
+        ),
+        hide_index=True,
+    )
+for c in ops_day.cleared_anomalies():
+    st.markdown(
+        f"Cleared {c.cleared_at:%Y-%m-%d %H:%M}: {c.summary} ({c.superseded_upload_id} was replaced by "
+        f"{c.replaced_by}, and it no longer holds)."
+    )
 
 st.header("Audit Log")
 entries = ops_day.audit_log()

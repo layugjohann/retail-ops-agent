@@ -13,7 +13,13 @@ from retail_ops_agent.anomalies import Anomaly
 from retail_ops_agent.defects import Defect
 from retail_ops_agent.upload_formats import SalesLine, StockLine
 from retail_ops_agent.uploads import Upload, UploadKind, UploadStatus
-from retail_ops_agent.views import UploaderMessage, UploadOutcome, UploadStatusChange
+from retail_ops_agent.views import (
+    ClearedAnomaly,
+    FlaggedReorder,
+    UploaderMessage,
+    UploadOutcome,
+    UploadStatusChange,
+)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS uploads (
@@ -58,6 +64,16 @@ CREATE TABLE IF NOT EXISTS investigations (
     anomaly_id       VARCHAR NOT NULL,
     investigated_at  TIMESTAMP NOT NULL,
     investigation    VARCHAR NOT NULL
+);
+CREATE TABLE IF NOT EXISTS anomaly_clearances (
+    anomaly_id    VARCHAR PRIMARY KEY,
+    cleared_at    TIMESTAMP NOT NULL,
+    clearance     VARCHAR NOT NULL
+);
+CREATE TABLE IF NOT EXISTS flagged_reorders (
+    action_id     VARCHAR NOT NULL,
+    flagged_at    TIMESTAMP NOT NULL,
+    flag          VARCHAR NOT NULL
 );
 CREATE TABLE IF NOT EXISTS uploader_messages (
     upload_id     VARCHAR NOT NULL,
@@ -202,6 +218,32 @@ class BiStore:
         """Every Anomaly flagged, oldest first."""
         rows = self._db.execute("SELECT anomaly FROM anomalies ORDER BY day, anomaly_id").fetchall()
         return [_ANOMALY.validate_json(r[0]) for r in rows]
+
+    def record_clearance(self, cleared: ClearedAnomaly) -> None:
+        self._db.execute(
+            "INSERT INTO anomaly_clearances VALUES (?, ?, ?)",
+            [cleared.anomaly_id, cleared.cleared_at, cleared.model_dump_json()],
+        )
+
+    def cleared_anomalies(self) -> list[ClearedAnomaly]:
+        """Every Anomaly cleared after a Supersede, newest first."""
+        rows = self._db.execute(
+            "SELECT clearance FROM anomaly_clearances ORDER BY cleared_at DESC, rowid DESC"
+        ).fetchall()
+        return [ClearedAnomaly.model_validate_json(r[0]) for r in rows]
+
+    def record_flag(self, flag: FlaggedReorder) -> None:
+        self._db.execute(
+            "INSERT INTO flagged_reorders VALUES (?, ?, ?)",
+            [flag.action_id, flag.flagged_at, flag.model_dump_json()],
+        )
+
+    def flagged_reorders(self) -> list[FlaggedReorder]:
+        """Every placed Reorder flagged for a person after a Supersede, newest first."""
+        rows = self._db.execute(
+            "SELECT flag FROM flagged_reorders ORDER BY flagged_at DESC, rowid DESC"
+        ).fetchall()
+        return [FlaggedReorder.model_validate_json(r[0]) for r in rows]
 
     def record_investigation(self, investigation: Investigation) -> None:
         self._db.execute(

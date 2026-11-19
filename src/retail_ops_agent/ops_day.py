@@ -16,12 +16,14 @@ from retail_ops_agent.action_policy import (
     AUTO_APPROVER,
     DEFAULT_AUTO_APPROVAL_LIMIT,
     QUEUE_RULES,
+    SUPERSEDE_RULES,
+    UNDONE_ON_SUPERSEDE,
     PolicyDecision,
     Route,
     decide,
 )
 from retail_ops_agent.analyst import MAX_HISTORY_DAYS, Investigation, investigate
-from retail_ops_agent.anomalies import Anomaly, detect_anomalies
+from retail_ops_agent.anomalies import Anomaly, built_on, detect_anomalies, still_holds
 from retail_ops_agent.approval_queue import ApprovalQueue, ApprovalStatus, QueuedReorder
 from retail_ops_agent.audit_log import AuditAction, AuditEntry, AuditLog, UndoOperation, UndoRecipe
 from retail_ops_agent.bi_store import BiStore
@@ -44,6 +46,8 @@ from retail_ops_agent.upload_formats import (
 from retail_ops_agent.uploader_messages import data_problem_message, quarantine_subject
 from retail_ops_agent.uploads import Upload, UploadKind, UploadStatus
 from retail_ops_agent.views import (
+    ClearedAnomaly,
+    FlaggedReorder,
     InventoryBySalesChannel,
     InventoryBySku,
     OpsDayOutcome,
@@ -53,6 +57,19 @@ from retail_ops_agent.views import (
 )
 
 INTAKE_AGENT = "Intake agent"
+
+# Upload statuses whose rows are in the BI data.
+_LOADED = (UploadStatus.ACCEPTED, UploadStatus.SAFE_FIXED)
+
+
+@dataclass
+class _Rechecked:
+    """What re-checking Anomalies after a Supersede did."""
+
+    cleared: list[ClearedAnomaly]
+    entries: list[AuditEntry]
+    withdrawn: list[QueuedReorder]
+    flagged: list[FlaggedReorder]
 
 
 def _key(upload: Upload) -> tuple[str, date, UploadKind]:
@@ -150,6 +167,16 @@ class OpsDay:
         Reorder replaces the pending one, which can then no longer be approved; the replacement is
         recorded in the Audit Log. Pending Actions past their Expiry are Expired first.
 
+        When a loaded Upload is Superseded, every standing Anomaly built on it (one whose detection
+        read that Sales Channel and day) is re-checked against the data that replaced it, once every
+        replacement is loaded. An Anomaly the statistics no longer flag is cleared. Its Tier 1 alerts
+        are undone through the Audit Log, each undo a new entry; its pending Reorders are withdrawn
+        from the Approval Queue, which is recorded in the Audit Log; and its Reorders already placed
+        in the ERP are flagged for a person, never cancelled automatically. An Anomaly whose
+        Investigation concluded Data Problem is not re-checked: its Uploads already went back to
+        Intake and no Action was taken on it. A Superseded Upload whose replacement is Quarantined
+        leaves no data to re-check against, so the Anomalies built on it are left as they are.
+
         An Investigation can instead conclude Data Problem: the Anomaly was caused by a Defect that
         validation missed, such as quantities reported in cases instead of units. Then no Action is
         taken on it. The Uploads behind it go back to Intake, which Quarantines each one: its rows
@@ -169,6 +196,8 @@ class OpsDay:
         touched: list[str] = []
         entries: list[AuditEntry] = []
         messages: list[UploaderMessage] = []
+        # Loaded Uploads Superseded this Ops Day, each with the Upload that replaced it.
+        superseded: list[tuple[str, Upload]] = []
         for upload in pending:
             touched.append(upload.upload_id)
             later = latest[_key(upload)]
@@ -178,6 +207,8 @@ class OpsDay:
                 self._bi.supersede(upload.upload_id, later.upload_id, now)
                 continue
             for earlier in self._bi.current_upload_ids(upload.sales_channel, upload.day, upload.kind):
+                if self._bi.status(earlier) in _LOADED:
+                    superseded.append((earlier, upload))
                 self._bi.supersede(earlier, upload.upload_id, self._clock.now())
                 touched.append(earlier)
             result = run_intake(upload, channel_kinds[upload.sales_channel], known_skus, self._models.intake)
@@ -196,6 +227,9 @@ class OpsDay:
             else:
                 self._load(upload, result.sales, result.stock)
                 entries.extend(self._record_safe_fix(upload, defect) for defect in result.safe_fixed)
+        # Every replacement is loaded before the Anomalies built on what it replaced are re-checked.
+        rechecked = self._recheck(superseded)
+        entries.extend(rechecked.entries)
         investigations: list[Investigation] = []
         reorders: list[QueuedReorder] = []
         skus = {s.code: s for s in self._erp.list_skus()}
@@ -270,6 +304,9 @@ class OpsDay:
             investigations=investigations,
             reorders=reorders,
             approval_queue=self._queue.pending(),
+            cleared_anomalies=rechecked.cleared,
+            withdrawn_reorders=rechecked.withdrawn,
+            flagged_reorders=rechecked.flagged,
         )
 
     def advance_time(self, delta: timedelta) -> list[QueuedReorder]:
@@ -315,6 +352,10 @@ class OpsDay:
             raise ValueError(
                 f"Action {action_id} was replaced by Action {item.replaced_by} from a newer Investigation "
                 "and can no longer be decided"
+            )
+        if item.status is ApprovalStatus.WITHDRAWN:
+            raise ValueError(
+                f"Action {action_id} was withdrawn: {item.withdrawn_because}. It can no longer be decided"
             )
         if item.status is not ApprovalStatus.PENDING:
             raise ValueError(f"Action {action_id} is already decided: {item.status.value}")
@@ -507,12 +548,20 @@ class OpsDay:
             )
         if target.undo.operation is UndoOperation.NOT_UNDOABLE:
             raise ValueError(f"Audit Log entry {entry_id} cannot be undone. {target.undo.description}")
+        return self._append_undo(
+            target,
+            taken_by=taken_by,
+            triggered_by=f"undo of Audit Log entry {target.entry_id} requested by {taken_by}",
+        )
+
+    def _append_undo(self, target: AuditEntry, *, taken_by: str, triggered_by: str) -> AuditEntry:
+        """Undo an entry already checked to be undoable, recording the undo as a new entry."""
         if target.action is AuditAction.REORDER:
             self._erp.cancel_reorder(_required(target.undo.reorder_id))
         entry = self._audit.append(
             recorded_at=self._clock.now(),
             action=AuditAction.UNDO,
-            triggered_by=f"undo of Audit Log entry {target.entry_id} requested by {taken_by}",
+            triggered_by=triggered_by,
             taken_by=taken_by,
             summary=f"Undid entry {target.entry_id}: {target.summary}",
             upload_id=target.upload_id,
@@ -529,6 +578,136 @@ class OpsDay:
         if target.upload_id is not None:
             self._settle_upload(target.upload_id)
         return entry
+
+    def _recheck(self, superseded: list[tuple[str, Upload]]) -> _Rechecked:
+        """Re-check every standing Anomaly built on a Superseded Upload, and clear those that no
+        longer hold: undo their Tier 1 Actions, withdraw their pending Reorders and flag their placed
+        Reorders for a person."""
+        rechecked = _Rechecked(cleared=[], entries=[], withdrawn=[], flagged=[])
+        # A replacement that was Quarantined left no data to re-check against: an Anomaly missing
+        # from what is left has not been shown not to hold, so only loaded replacements count.
+        superseded = [(e, later) for e, later in superseded if self._bi.status(later.upload_id) in _LOADED]
+        if not superseded:
+            return rechecked
+        skus = {s.code: s for s in self._erp.list_skus()}
+        cleared = {c.anomaly_id for c in self._bi.cleared_anomalies()}
+        investigations: dict[str, list[Investigation]] = {}
+        for investigation in reversed(self._bi.investigations()):
+            investigations.setdefault(investigation.anomaly.anomaly_id, []).append(investigation)
+        for anomaly in self._bi.anomalies():
+            found = investigations.get(anomaly.anomaly_id, [])
+            if anomaly.anomaly_id in cleared or any(i.data_problem is not None for i in found):
+                continue
+            cause = next(
+                (
+                    (earlier, later)
+                    for earlier, later in superseded
+                    if built_on(anomaly, later.sales_channel, later.day)
+                ),
+                None,
+            )
+            if cause is None or still_holds(self._bi, anomaly, skus):
+                continue
+            earlier, later = cause
+            clearance = ClearedAnomaly(
+                anomaly_id=anomaly.anomaly_id,
+                cleared_at=self._clock.now(),
+                superseded_upload_id=earlier,
+                replaced_by=later.upload_id,
+                summary=anomaly.summary,
+            )
+            self._bi.record_clearance(clearance)
+            rechecked.cleared.append(clearance)
+            reason = (
+                f"Anomaly {anomaly.anomaly_id} no longer holds: Upload {earlier}, which it was built on, "
+                f"was Superseded by Upload {later.upload_id}"
+            )
+            for investigation in found:
+                self._clear_actions(investigation, clearance, reason, rechecked)
+        return rechecked
+
+    def _clear_actions(
+        self, investigation: Investigation, clearance: ClearedAnomaly, reason: str, rechecked: _Rechecked
+    ) -> None:
+        """Undo the Investigation's standing Tier 1 Actions, withdraw its pending Reorders and flag its
+        placed Reorders. A Reorder that already reached the ERP is never cancelled here."""
+        for target in self._audit.entries():
+            if (
+                target.investigation_id == investigation.investigation_id
+                and target.action in UNDONE_ON_SUPERSEDE
+                and target.undone_by is None
+            ):
+                rechecked.entries.append(
+                    self._append_undo(target, taken_by=SUPERSEDE_RULES, triggered_by=reason)
+                )
+        for item in self._queue.all():
+            if item.investigation_id != investigation.investigation_id:
+                continue
+            if item.status is ApprovalStatus.PENDING:
+                withdrawn, entry = self._withdraw(item, reason)
+                rechecked.withdrawn.append(withdrawn)
+                rechecked.entries.append(entry)
+            elif item.reorder_id is not None and item.audit_entry_id is not None:
+                if self._audit.entry(item.audit_entry_id).undone_by is not None:
+                    continue
+                flag = FlaggedReorder(
+                    action_id=item.action_id,
+                    reorder_id=item.reorder_id,
+                    audit_entry_id=item.audit_entry_id,
+                    investigation_id=item.investigation_id,
+                    anomaly_id=clearance.anomaly_id,
+                    sales_channel=item.sales_channel,
+                    sku=item.sku,
+                    quantity=item.quantity,
+                    cost=item.cost,
+                    supplier_name=item.supplier_name,
+                    flagged_at=self._clock.now(),
+                    superseded_upload_id=clearance.superseded_upload_id,
+                    replaced_by=clearance.replaced_by,
+                    reason=(
+                        f"{reason}. Reorder {item.reorder_id} already reached the ERP and "
+                        f"{item.supplier_name}, so it is not undone automatically: decide whether to keep "
+                        f"it, or undo Audit Log entry {item.audit_entry_id} to cancel it"
+                    ),
+                )
+                self._bi.record_flag(flag)
+                rechecked.flagged.append(flag)
+
+    def _withdraw(self, item: QueuedReorder, reason: str) -> tuple[QueuedReorder, AuditEntry]:
+        """Take a pending Reorder whose Anomaly no longer holds out of the Approval Queue, and record
+        that in the Audit Log."""
+        withdrawn = self._queue.save(
+            item.model_copy(
+                update={
+                    "status": ApprovalStatus.WITHDRAWN,
+                    "decided_at": self._clock.now(),
+                    "decided_by": SUPERSEDE_RULES,
+                    "withdrawn_because": reason,
+                }
+            )
+        )
+        entry = self._audit.append(
+            recorded_at=self._clock.now(),
+            action=AuditAction.WITHDRAW_REORDER,
+            triggered_by=reason,
+            taken_by=SUPERSEDE_RULES,
+            summary=(
+                f"Withdrew pending Reorder {item.action_id} ({item.quantity} units of {item.sku} for "
+                f"{item.sales_channel}, cost {item.cost:.2f}) from the Approval Queue"
+            ),
+            upload_id=None,
+            defect=None,
+            investigation_id=item.investigation_id,
+            undo=UndoRecipe(
+                operation=UndoOperation.NOT_UNDOABLE,
+                description=(
+                    f"Not undone from the Audit Log: the Anomaly behind {item.action_id} no longer holds, "
+                    "so it is never put back in the Approval Queue. A new Investigation queues a new "
+                    "Reorder if one is needed."
+                ),
+            ),
+        )
+        return withdrawn, entry
 
     def _send_back_to_intake(
         self, investigation: Investigation
@@ -724,8 +903,18 @@ class OpsDay:
         return self._bi.uploads()
 
     def anomalies(self) -> list[Anomaly]:
-        """Every Anomaly flagged, oldest first."""
+        """Every Anomaly flagged, oldest first, cleared ones too."""
         return self._bi.anomalies()
+
+    def cleared_anomalies(self) -> list[ClearedAnomaly]:
+        """Every Anomaly cleared because an Upload it was built on was Superseded and it no longer
+        holds, newest first."""
+        return self._bi.cleared_anomalies()
+
+    def flagged_reorders(self) -> list[FlaggedReorder]:
+        """Every Reorder already placed for an Anomaly that no longer holds, flagged for a person,
+        newest first. Each is still in the ERP unless a person has since undone it."""
+        return self._bi.flagged_reorders()
 
     def investigations(self) -> list[Investigation]:
         """Every Investigation with its cause, evidence and recommended Action, newest first."""
@@ -740,7 +929,7 @@ class OpsDay:
     def reorders(self) -> list[QueuedReorder]:
         """Every Reorder proposed, newest first, with its Approval status: pending, approved by a
         person, approved under the Auto-approval Limit, rejected, replaced by a newer
-        Investigation's Reorder, or Expired."""
+        Investigation's Reorder, Expired, or withdrawn after a Supersede."""
         self._expire()
         return self._queue.all()
 

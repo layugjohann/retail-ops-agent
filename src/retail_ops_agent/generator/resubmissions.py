@@ -3,18 +3,25 @@
 A corrected resubmission is the Upload as it should have been sent: the clean one, without any
 planted Defects. A changed resubmission is clean too, but the Uploader has revised some figures,
 so its totals differ from the first Upload's by an amount the ground truth records.
+
+A restock-counted resubmission is an inventory Upload whose Uploader missed a Restock when counting
+stock: the resubmission adds the units that arrived for the SKU of the stockout risk planted at the
+Sales Channel, enough to cover its Lead Time twice over, so the risk the first Upload showed no
+longer holds.
 """
 
 from __future__ import annotations
 
 import csv
 import io
+import math
 import random
-from datetime import date
+from datetime import date, timedelta
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict
 
+from retail_ops_agent.anomalies import SALES_WINDOW_DAYS, AnomalyKind
 from retail_ops_agent.catalog import SalesChannelKind
 from retail_ops_agent.generator.formats import upload_csv
 from retail_ops_agent.generator.history import History
@@ -29,6 +36,9 @@ _MAX_UNIT_CHANGE = 4
 class ResubmissionKind(StrEnum):
     CORRECTED = "corrected"
     CHANGED = "changed"
+    # An inventory resubmission counting a Restock the first Upload missed, for the SKU of the
+    # stockout risk planted at the Sales Channel.
+    RESTOCK_COUNTED = "restock_counted"
 
 
 class ResubmissionPlan(BaseModel):
@@ -78,6 +88,8 @@ def resubmission_csv(history: History, plan: ResubmissionPlan) -> tuple[str, Pla
     content, changed_rows, unit_change, net_sales_change = clean, (), 0, 0.0
     if plan.resubmission_kind is ResubmissionKind.CHANGED:
         content, changed_rows, unit_change, net_sales_change = _revise(history, plan, clean)
+    elif plan.resubmission_kind is ResubmissionKind.RESTOCK_COUNTED:
+        content, changed_rows, unit_change = _count_restock(history, plan, clean)
     return content, PlantedResubmission(
         sales_channel=plan.sales_channel,
         day=plan.day,
@@ -129,6 +141,42 @@ def _revise(history: History, plan: ResubmissionPlan, clean: str) -> tuple[str, 
     writer.writerow(header)
     writer.writerows(rows)
     return buffer.getvalue(), tuple(i + 2 for i in chosen), unit_change, round(net_sales_change, 2)
+
+
+def _count_restock(history: History, plan: ResubmissionPlan, clean: str) -> tuple[str, tuple[int, ...], int]:
+    """Add the units of a missed Restock to the planted stockout risk's SKU, enough that its days of
+    cover at the recent average are at least twice its Lead Time."""
+    if plan.upload_kind is not UploadKind.INVENTORY:
+        raise ValueError("a restock-counted resubmission is an inventory Upload")
+    planted = [
+        a
+        for a in history.planted_anomalies
+        if a.kind is AnomalyKind.STOCKOUT_RISK and a.sales_channel == plan.sales_channel and a.sku
+    ]
+    if not planted:
+        raise ValueError(f"no stockout risk is planted at {plan.sales_channel} for a Restock to cover")
+    sku_code = planted[0].sku
+    sku = next(s for s in history.catalog.skus if s.code == sku_code)
+    window = [d for d in history.days if plan.day - timedelta(days=SALES_WINDOW_DAYS - 1) <= d <= plan.day]
+    sold = sum(
+        r.quantity_sold for d in window for r in history.sales(plan.sales_channel, d) if r.sku == sku_code
+    )
+    average = sold / len(window)
+    upload_format = format_for(_channel_kind(history, plan.sales_channel), plan.upload_kind)
+    quantity_column, _ = _REVISED_COLUMNS[upload_format]
+    header, *rows = list(csv.reader(io.StringIO(clean)))
+    quantity_at = header.index(quantity_column)
+    sku_at = header.index("SKU Code" if upload_format is UploadFormat.ONLINE_SHOP_STOCK_SNAPSHOT else "sku")
+    [index] = [i for i, row in enumerate(rows) if row[sku_at] == sku_code]
+    on_hand = int(rows[index][quantity_at])
+    wanted = math.ceil(average * sku.lead_time_days * 2) + sku.case_pack
+    unit_change = max(wanted - on_hand, sku.case_pack)
+    rows[index][quantity_at] = str(on_hand + unit_change)
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    writer.writerow(header)
+    writer.writerows(rows)
+    return buffer.getvalue(), (index + 2,), unit_change
 
 
 def _channel_kind(history: History, sales_channel: str) -> SalesChannelKind:

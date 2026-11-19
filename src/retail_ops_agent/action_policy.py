@@ -42,6 +42,15 @@ AUTO_APPROVER = "Action policy (Auto-approval Limit)"
 # Approval Queue and Audit Log record it.
 QUEUE_RULES = "Action policy (Approval Queue rules)"
 
+# Who clears Anomalies that no longer hold after a Supersede, undoes the Tier 1 Actions taken on them,
+# withdraws their pending Reorders and flags their placed Reorders, as the Audit Log records it.
+SUPERSEDE_RULES = "Action policy (Supersede rules)"
+
+# The Tier 1 Actions on an Anomaly that are undone through the Audit Log when the Anomaly no longer
+# holds after a Supersede. A Tier 2 Action that already went out is never among them: it is flagged
+# for a person instead.
+UNDONE_ON_SUPERSEDE = frozenset({AuditAction.ALERT})
+
 # Which Audit Log Action each kind of proposal becomes.
 PROPOSED_ACTIONS: dict[ProposedActionKind, AuditAction] = {
     ProposedActionKind.ALERT: AuditAction.ALERT,

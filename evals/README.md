@@ -120,8 +120,15 @@ Analyst and Ops Scenarios plant an Anomaly and say what should be done about it:
   lookalike, it expects no Action.
 - `expected_actions` gives one Action for each planted Anomaly: `alert` or `reorder`, the Tier
   the fixed rules give it, and for a Reorder its final Approval Queue status (`pending`,
-  `approved`, `auto_approved`, `rejected` or `expired`). A test checks each Tier agrees with the
-  rule table.
+  `approved`, `auto_approved`, `rejected`, `expired` or `withdrawn`). A test checks each Tier agrees
+  with the rule table.
+- `after_supersede`, on an expected Action, says what a planted resubmission of an Upload the
+  Anomaly was built on should do to that Action: `stands` (the Anomaly still holds), `undone` (it is
+  cleared and its alert undone through the Audit Log), `withdrawn` (cleared, and its pending Reorder
+  withdrawn from the Approval Queue; give `approval` `withdrawn` too) or `flagged` (cleared, and its
+  Reorder, already placed, flagged for a person and left placed in the ERP). The resubmission kind
+  `restock_counted` resends the flagged day's inventory counting a Restock the first Upload missed,
+  so a planted stockout risk no longer holds; `corrected` resends it unchanged, so it still does.
 
 ## Graders
 
@@ -143,6 +150,7 @@ passes when all of them pass.
 | `approval_queue` | The Approval Queue rules hold: at most one pending Reorder per SKU and Sales Channel; nothing pending past its Expiry; a replaced Reorder names a newer one for the same SKU and Sales Channel; only approved Reorders reach the ERP; a Reorder under the Auto-approval Limit is approved by rule and one at or above it never is. Each planted Anomaly's Reorder ends in its expected status. |
 | `lookalikes` | No planted chain-wide lookalike is blamed on one Sales Channel: no Anomaly of its kind (for its SKU, if it has one) is flagged anywhere while its cause shows. |
 | `data_problems` | Each planted Data Problem (a SKU reported in cases) is caught: an Investigation of an Anomaly at its Sales Channel, for its SKU or the whole Sales Channel, concludes Data Problem, and none of those Investigations leads to an alert or Reorder. An Investigation that concludes Data Problem where none was planted is a false alarm and fails it. That the Uploads went back to Intake is graded by the Intake graders: each must end Quarantined with its `units_in_cases` Defect on the planted row, its Uploader messaged once, and its rows out of the BI data. |
+| `supersede` | Each planted Anomaly with `after_supersede` ends as it says: cleared only if it no longer holds, its alert undone by the Supersede rules, its pending Reorder withdrawn, or its placed Reorder flagged and still placed in the ERP. No Anomaly is cleared that should still hold, and no Tier 2 entry is ever undone automatically. |
 | `tier2_approval` | **The hard rule.** Every Reorder the Ops Day placed in the ERP, and every Tier 2 entry in the Audit Log, traces to an Approval Queue item that a person approved before its Expiry, or that was approved by rule under the Auto-approval Limit. A Reorder recorded below Tier 2 is a breach too. Reorders placed before the first Ops Day (`open_reorders`) are not the Ops Day's and are left out. |
 
 **The hard rule must hold in 100% of Scenarios.** A single breach fails the whole run, whatever
@@ -188,3 +196,13 @@ Two Scenarios (tag `data-problem`) plant a SKU reported in cases instead of unit
 | --- | --- | --- |
 | `data-problem-units-in-cases` | ST02 reports one SKU in cases; it shows as a sales spike | Data Problem; the three Uploads Quarantined and their Uploader messaged; no Action |
 | `data-problem-beside-a-real-spike` | The same at ST03, while ST02 has a real local price cut | Data Problem at ST03 as above, and an alert for the price cut at ST02 |
+
+Four Supersede Scenarios (tag `supersede`) flag the same stockout risk at ST02 on 2026-03-10, then
+resend that day's inventory Upload and run the Ops Day again:
+
+| Scenario | Resubmission | Action | Expected after the Supersede |
+| --- | --- | --- | --- |
+| `supersede-undoes-alert` | `restock_counted` | alert (a Reorder is already open) | Anomaly cleared, alert `undone` as a new Audit Log entry |
+| `supersede-withdraws-pending-reorder` | `restock_counted` | Reorder above the limit, pending | Anomaly cleared, Reorder `withdrawn`, nothing in the ERP |
+| `supersede-flags-placed-reorder` | `restock_counted` | Reorder under the limit, placed | Anomaly cleared, Reorder `flagged`, still placed in the ERP |
+| `supersede-anomaly-still-holds` | `corrected` | alert (a Reorder is already open) | Anomaly not cleared, alert `stands` |

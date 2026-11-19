@@ -71,6 +71,50 @@ class OpsDayOutcome(BaseModel):
     reorders: list[QueuedReorder] = []
     # Every Tier 2 Action waiting for Approval once the day is processed.
     approval_queue: list[QueuedReorder] = []
+    # Anomalies cleared because an Upload they were built on was Superseded and they no longer hold.
+    cleared_anomalies: list[ClearedAnomaly] = []
+    # Pending Reorders withdrawn from the Approval Queue because their Anomaly was cleared.
+    withdrawn_reorders: list[QueuedReorder] = []
+    # Reorders already placed for a cleared Anomaly, flagged for a person and not undone.
+    flagged_reorders: list[FlaggedReorder] = []
+
+
+class ClearedAnomaly(BaseModel):
+    """An Anomaly that no longer holds: an Upload it was built on was Superseded, and the statistics
+    no longer flag it in the data that replaced it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    anomaly_id: str
+    cleared_at: datetime
+    superseded_upload_id: str
+    replaced_by: str
+    summary: str
+
+
+class FlaggedReorder(BaseModel):
+    """A Reorder already placed in the ERP for an Anomaly that no longer holds after a Supersede.
+
+    It is never undone automatically: a person decides what to do with it, for example by undoing it
+    from the Audit Log, which cancels it in the ERP.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    action_id: str
+    reorder_id: str
+    audit_entry_id: int
+    investigation_id: str
+    anomaly_id: str
+    sales_channel: str
+    sku: str
+    quantity: int
+    cost: float
+    supplier_name: str
+    flagged_at: datetime
+    superseded_upload_id: str
+    replaced_by: str
+    reason: str
 
 
 class SalesBySalesChannel(BaseModel):

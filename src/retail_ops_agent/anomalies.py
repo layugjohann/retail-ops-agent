@@ -461,3 +461,37 @@ def _slow_movers(bi: SalesAndStock, day: date, skus: Mapping[str, Sku]) -> dict[
             days_of_cover=round(cover, 1) if cover is not None else None,
         )
     return slow
+
+
+# How many days, up to and including the day an Anomaly is flagged, detection reads to flag each
+# kind; and whether it reads the other Sales Channels' data too, to compare against.
+_DAYS_READ: dict[AnomalyKind, int] = {
+    AnomalyKind.STOCKOUT_RISK: SALES_WINDOW_DAYS,
+    AnomalyKind.SALES_DROP: DROP_WINDOW_DAYS + USUAL_WINDOW_DAYS,
+    AnomalyKind.SALES_SPIKE: SPIKE_WINDOW_DAYS + USUAL_WINDOW_DAYS,
+    AnomalyKind.SLOW_MOVER: SLOW_WINDOW_DAYS + USUAL_WINDOW_DAYS,
+}
+_READS_OTHER_SALES_CHANNELS = frozenset({AnomalyKind.SALES_DROP, AnomalyKind.SALES_SPIKE})
+
+
+def built_on(anomaly: Anomaly, sales_channel: str, day: date) -> bool:
+    """Whether detection read the Sales Channel's accepted data for the day to flag the Anomaly, so an
+    Upload for that Sales Channel and day is one the Anomaly is built on."""
+    if sales_channel != anomaly.sales_channel and anomaly.kind not in _READS_OTHER_SALES_CHANNELS:
+        return False
+    return anomaly.day - timedelta(days=_DAYS_READ[anomaly.kind] - 1) <= day <= anomaly.day
+
+
+def still_holds(bi: SalesAndStock, anomaly: Anomaly, skus: Mapping[str, Sku]) -> bool:
+    """Whether the statistics still flag the Anomaly on its day in the accepted data as it is now.
+
+    Unlike detection, this does not ask whether the Anomaly was new on its day: it asks whether the
+    pattern it reported is there at all.
+    """
+    flags: dict[AnomalyKind, Callable[[], Mapping[_Key, _AnomalyBase]]] = {
+        AnomalyKind.STOCKOUT_RISK: lambda: _at_risk(bi, anomaly.day, skus),
+        AnomalyKind.SALES_DROP: lambda: _sales_drops(bi, anomaly.day),
+        AnomalyKind.SALES_SPIKE: lambda: _sales_spikes(bi, anomaly.day, skus),
+        AnomalyKind.SLOW_MOVER: lambda: _slow_movers(bi, anomaly.day, skus),
+    }
+    return (anomaly.sales_channel, anomaly.sku) in flags[anomaly.kind]()
