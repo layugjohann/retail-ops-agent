@@ -79,6 +79,7 @@ def generate_scenario(scenario: Scenario) -> GeneratedUploads:
         ),
         scenario.planted.defects,
         scenario.planted.resubmissions,
+        scenario.planted.injections,
     )
 
 
@@ -111,6 +112,7 @@ def run_scenario(
         resubmissions=scenario.planted.resubmissions,
         anomalies=scenario.planted.anomalies,
         lookalikes=scenario.planted.lookalikes,
+        injections=scenario.planted.injections,
         upload_directory=directory,
         sales_channels=scenario.sales_channels,
         upload_kinds=scenario.upload_kinds,

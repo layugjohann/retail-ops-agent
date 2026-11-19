@@ -1,4 +1,5 @@
-"""Plants Defects in generated Uploads and records each one in a ground-truth record (ADR 0005).
+"""Plants Defects and prompt injections in generated Uploads and records each one in a ground-truth
+record (ADR 0005).
 
 The ground truth also records the Anomalies and lookalikes planted in the history the Uploads come from.
 
@@ -29,6 +30,7 @@ from retail_ops_agent.defects import DefectKind, has_safe_fix
 from retail_ops_agent.generator.anomalies import PlantedAnomaly, PlantedLookalike
 from retail_ops_agent.generator.formats import upload_csv
 from retail_ops_agent.generator.history import History
+from retail_ops_agent.generator.injections import InjectionPlan, PlantedInjection, plant_injection
 from retail_ops_agent.generator.resubmissions import PlantedResubmission, ResubmissionPlan, resubmission_csv
 from retail_ops_agent.upload_formats import (
     MAX_PLAUSIBLE_DAILY_UNITS,
@@ -153,6 +155,7 @@ class GroundTruth(BaseModel):
     resubmissions: tuple[PlantedResubmission, ...] = ()
     anomalies: tuple[PlantedAnomaly, ...] = ()
     lookalikes: tuple[PlantedLookalike, ...] = ()
+    injections: tuple[PlantedInjection, ...] = ()
 
     def write(self, path: Path) -> None:
         path.write_text(self.model_dump_json(indent=2), encoding="utf-8")
@@ -194,9 +197,14 @@ def generate_uploads(
     history: History,
     plans: Sequence[DefectPlan] = (),
     resubmissions: Sequence[ResubmissionPlan] = (),
+    injections: Sequence[InjectionPlan] = (),
 ) -> GeneratedUploads:
-    """Plant each planned Defect and resubmission; Uploads with no Defect planted are the clean
-    ones from the history."""
+    """Plant each planned Defect, resubmission and prompt injection; Uploads with nothing planted are
+    the clean ones from the history.
+
+    An injection is planted after the Upload's Defects, in its free-text column, so it moves no
+    planted Defect. It is never planted beside a wrong delimiter: its text may hold commas.
+    """
     resubmitted: dict[tuple[str, date, UploadKind], str] = {}
     planted_resubmissions: list[PlantedResubmission] = []
     for resubmission in resubmissions:
@@ -212,11 +220,23 @@ def generate_uploads(
         if plan.day not in history.days:
             raise ValueError(f"{plan.day} is not one of the generated days")
         by_upload.setdefault((plan.sales_channel, plan.day, plan.upload_kind), []).append(plan)
+    injected: dict[tuple[str, date, UploadKind], InjectionPlan] = {}
+    for injection in injections:
+        key = (injection.sales_channel, injection.day, injection.upload_kind)
+        if injection.day not in history.days:
+            raise ValueError(f"{injection.day} is not one of the generated days")
+        if key in injected:
+            raise ValueError(f"more than one injection planned for {key}")
+        if any(p.defect_kind is DefectKind.WRONG_DELIMITER for p in by_upload.get(key, [])):
+            raise ValueError("an injection cannot be planted beside a wrong delimiter")
+        injected[key] = injection
 
     in_cases = _skus_in_cases(history, plans)
     planted_contents: dict[tuple[str, date, UploadKind], str] = {}
     planted: list[PlantedDefect] = []
-    for key, upload_plans in by_upload.items():
+    planted_injections: list[PlantedInjection] = []
+    for key in dict.fromkeys([*by_upload, *injected]):
+        upload_plans = by_upload.get(key, [])
         channel, day, kind = key
         draft = _Draft.parse(
             upload_csv(history, *key),
@@ -236,6 +256,17 @@ def generate_uploads(
                 )
                 row, column = _PLANTERS[plan.defect_kind](draft, rng)
             locations.append((plan, row, column))
+        if key in injected:
+            planted_injections.append(
+                plant_injection(
+                    injected[key],
+                    catalog=history.catalog,
+                    upload_format=draft.upload_format,
+                    columns=draft.columns,
+                    header=draft.header,
+                    rows=draft.rows,
+                )
+            )
         planted_contents[key] = draft.render()
         expected = (
             UploadStatus.SAFE_FIXED
@@ -269,6 +300,7 @@ def generate_uploads(
             resubmissions=tuple(planted_resubmissions),
             anomalies=history.planted_anomalies,
             lookalikes=history.planted_lookalikes,
+            injections=tuple(planted_injections),
         ),
         _planted=planted_contents,
         _resubmitted=resubmitted,

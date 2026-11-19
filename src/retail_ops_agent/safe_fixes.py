@@ -48,8 +48,13 @@ class SafeFixResult:
     fixed: list[Defect]
 
 
-def apply_safe_fixes(content: str, expected_columns: tuple[str, ...]) -> SafeFixResult:
-    """Apply every Safe Fix that applies. Content with nothing to fix is returned unchanged."""
+def apply_safe_fixes(
+    content: str, expected_columns: tuple[str, ...], optional_columns: tuple[str, ...] = ()
+) -> SafeFixResult:
+    """Apply every Safe Fix that applies. Content with nothing to fix is returned unchanged.
+
+    optional_columns may appear in the header beside the expected ones, such as a free-text column.
+    """
     fixed: list[Defect] = []
     text = content
     if text.startswith(BYTE_ORDER_MARK):
@@ -61,7 +66,7 @@ def apply_safe_fixes(content: str, expected_columns: tuple[str, ...]) -> SafeFix
             )
         )
 
-    delimiter = _delimiter(text, expected_columns)
+    delimiter = _delimiter(text, expected_columns, optional_columns)
     if delimiter != ",":
         fixed.append(
             Defect(
@@ -108,12 +113,16 @@ def apply_safe_fixes(content: str, expected_columns: tuple[str, ...]) -> SafeFix
     return SafeFixResult(content=buffer.getvalue(), fixed=fixed)
 
 
-def _delimiter(text: str, expected_columns: tuple[str, ...]) -> str:
+def _delimiter(text: str, expected_columns: tuple[str, ...], optional_columns: tuple[str, ...]) -> str:
     """The delimiter the Upload uses: another one only if it is the only possible reading."""
     if "," in text:
         return ","
     first_line = text.split("\n", 1)[0]
-    candidates = [d for d in OTHER_DELIMITERS if _header_matches(_split(first_line, d), expected_columns)]
+    candidates = [
+        d
+        for d in OTHER_DELIMITERS
+        if _header_matches([h for h in _split(first_line, d) if h not in optional_columns], expected_columns)
+    ]
     return candidates[0] if len(candidates) == 1 else ","
 
 
