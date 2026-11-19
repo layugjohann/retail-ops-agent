@@ -1,11 +1,14 @@
 """The Action policy: a fixed rule table, not the model, decides each proposed Action's Tier (ADR 0002).
 
 Tier 0 and Tier 1 Actions run on their own and are recorded in the Audit Log so they can be undone.
+Tier 2 Actions wait in the Approval Queue for a human, except a Reorder whose cost is under the
+Auto-approval Limit, which is approved by rule.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 
 from retail_ops_agent.audit_log import ACTION_TIERS, ActionTier, AuditAction
 from retail_ops_agent.ops_agent import ActionProposal, ProposedActionKind
@@ -13,24 +16,52 @@ from retail_ops_agent.ops_agent import ActionProposal, ProposedActionKind
 # Who alerts go to. Fixed by rule; the model does not choose recipients.
 ALERT_RECIPIENT = "inventory.planning@cobalthome.example"
 
+# A Reorder costing less than this is approved without a human. Configurable per Ops Day; this is the
+# default for Cobalt Home, about a case or two of a typical SKU.
+DEFAULT_AUTO_APPROVAL_LIMIT = 150.00
+
+# Who approves a Reorder under the Auto-approval Limit, as the Audit Log records it.
+AUTO_APPROVER = "Action policy (Auto-approval Limit)"
+
 # Which Audit Log Action each kind of proposal becomes.
 PROPOSED_ACTIONS: dict[ProposedActionKind, AuditAction] = {
     ProposedActionKind.ALERT: AuditAction.ALERT,
+    ProposedActionKind.REORDER: AuditAction.REORDER,
 }
+
+
+class Route(StrEnum):
+    # Tier 0 and Tier 1: runs now.
+    RUN = "run"
+    # Tier 2: waits in the Approval Queue for a human.
+    QUEUE = "queue"
+    # A Reorder under the Auto-approval Limit: approved by rule and placed now.
+    AUTO_APPROVE = "auto_approve"
 
 
 @dataclass(frozen=True)
 class PolicyDecision:
     action: AuditAction
     tier: ActionTier
+    route: Route
 
     @property
     def runs_on_its_own(self) -> bool:
         """Tier 0 and Tier 1 Actions run without waiting for Approval."""
-        return self.tier < ActionTier.EXTERNAL
+        return self.route is Route.RUN
 
 
-def decide(proposal: ActionProposal) -> PolicyDecision:
-    """The Action and Tier for a proposal, by rule. Nothing in the proposal's text is consulted."""
+def decide(proposal: ActionProposal, *, cost: float | None, auto_approval_limit: float) -> PolicyDecision:
+    """The Action, Tier and route for a proposal, by rule. Nothing in the proposal's text is consulted.
+
+    cost is the Reorder's cost worked out from the ERP's unit cost, never taken from the model.
+    """
     action = PROPOSED_ACTIONS[proposal.kind]
-    return PolicyDecision(action=action, tier=ACTION_TIERS[action])
+    tier = ACTION_TIERS[action]
+    if tier < ActionTier.EXTERNAL:
+        route = Route.RUN
+    elif action is AuditAction.REORDER and cost is not None and cost < auto_approval_limit:
+        route = Route.AUTO_APPROVE
+    else:
+        route = Route.QUEUE
+    return PolicyDecision(action=action, tier=tier, route=route)

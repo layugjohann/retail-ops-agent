@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
+from retail_ops_agent.action_policy import DEFAULT_AUTO_APPROVAL_LIMIT
 from retail_ops_agent.catalog import SalesChannelKind
 from retail_ops_agent.clock import SimulatedClock
 from retail_ops_agent.data_source import CsvDataSource
@@ -41,6 +42,7 @@ def build_sandbox(
     upload_directory: Path | None = None,
     sales_channels: Sequence[str] | None = None,
     upload_kinds: Sequence[UploadKind] = tuple(UploadKind),
+    auto_approval_limit: float = DEFAULT_AUTO_APPROVAL_LIMIT,
 ) -> OpsDay:
     """Submit every Sales Channel's sales and inventory Uploads for each day and process those Ops Days.
 
@@ -65,6 +67,7 @@ def build_sandbox(
         notifier=LogNotifier(),
         data_source=CsvDataSource(directory),
         clock=clock,
+        auto_approval_limit=auto_approval_limit,
     )
     channel_kinds = {c.code: c.kind for c in catalog.sales_channels}
     submitting = [c for c in catalog.sales_channels if sales_channels is None or c.code in sales_channels]
