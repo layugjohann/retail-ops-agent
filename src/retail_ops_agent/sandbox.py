@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import tempfile
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
@@ -25,6 +25,7 @@ from retail_ops_agent.generator import (
 from retail_ops_agent.notifier import LogNotifier
 from retail_ops_agent.ops_day import Models, OpsDay
 from retail_ops_agent.uploads import UploadKind
+from retail_ops_agent.views import OpsDayOutcome
 
 UPLOAD_TIME = time(21, 0)
 # How long after the first Uploads a planned resubmission arrives, before the Ops Day runs.
@@ -49,6 +50,7 @@ def build_sandbox(
     auto_approval_limit: float = DEFAULT_AUTO_APPROVAL_LIMIT,
     run_days: int | None = None,
     erp: ErpClient | None = None,
+    on_ops_day: Callable[[OpsDay, OpsDayOutcome], None] | None = None,
 ) -> OpsDay:
     """Submit every Sales Channel's sales and inventory Uploads for each day and process those Ops Days.
 
@@ -64,6 +66,9 @@ def build_sandbox(
 
     erp is the ERP the sandbox's Ops Day uses; by default a fresh in-memory fake seeded from the
     catalog. An eval passes its own so it can see every Reorder that reached the ERP.
+
+    on_ops_day, if given, is called with the Ops Day and its outcome after each Ops Day is processed,
+    so Replay Mode can record it.
     """
     catalog = generate_catalog(seed)
     generated = generate_uploads(
@@ -97,7 +102,7 @@ def build_sandbox(
                     content=generated.content(channel.code, day, kind),
                     uploader=_uploader(channel.code, channel.kind),
                 )
-        ops_day.run_ops_day(day)
+        _ran(ops_day, ops_day.run_ops_day(day), on_ops_day)
         # Resubmissions arrive after the Ops Day has processed the first Uploads; the next Ops Day
         # picks them up.
         ops_day.advance_time(RESUBMISSION_DELAY)
@@ -112,8 +117,15 @@ def build_sandbox(
                 )
         ops_day.advance_time(datetime.combine(day + timedelta(days=1), UPLOAD_TIME) - clock.now())
     if any(plan.day == days_run[-1] for plan in resubmissions):
-        ops_day.run_ops_day(days_run[-1])
+        _ran(ops_day, ops_day.run_ops_day(days_run[-1]), on_ops_day)
     return ops_day
+
+
+def _ran(
+    ops_day: OpsDay, outcome: OpsDayOutcome, on_ops_day: Callable[[OpsDay, OpsDayOutcome], None] | None
+) -> None:
+    if on_ops_day is not None:
+        on_ops_day(ops_day, outcome)
 
 
 def _uploader(sales_channel: str, kind: SalesChannelKind) -> str:

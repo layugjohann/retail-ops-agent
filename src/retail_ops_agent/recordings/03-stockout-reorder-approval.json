@@ -1,0 +1,288 @@
+{
+ "recording_id": "03-stockout-reorder-approval",
+ "title": "Stockout risk: a Reorder waits for Approval",
+ "description": "A demand surge drains a SKU at ST05. With an Auto-approval Limit of 0 the proposed Reorder waits in the Approval Queue; the inventory planner approves it, which places it in the ERP and records it in the Audit Log.",
+ "model": "offline scripted model (no key set)",
+ "seed": 42,
+ "auto_approval_limit": 0.0,
+ "ops_days": [
+  {
+   "outcome": {
+    "day": "2026-03-09",
+    "uploads": [
+     {
+      "upload_id": "ST05-2026-03-09-inventory-001",
+      "sales_channel": "ST05",
+      "day": "2026-03-09",
+      "kind": "inventory",
+      "uploader": "manager.st05@cobalthome.example",
+      "status": "accepted",
+      "processed_at": "2026-03-09T21:00:00",
+      "defects": [],
+      "superseded_by": null,
+      "history": [
+       {
+        "changed_at": "2026-03-09T21:00:00",
+        "status": "accepted"
+       }
+      ]
+     },
+     {
+      "upload_id": "ST05-2026-03-09-sales-001",
+      "sales_channel": "ST05",
+      "day": "2026-03-09",
+      "kind": "sales",
+      "uploader": "manager.st05@cobalthome.example",
+      "status": "accepted",
+      "processed_at": "2026-03-09T21:00:00",
+      "defects": [],
+      "superseded_by": null,
+      "history": [
+       {
+        "changed_at": "2026-03-09T21:00:00",
+        "status": "accepted"
+       }
+      ]
+     }
+    ],
+    "audit_entries": [],
+    "uploader_messages": [],
+    "anomalies": [],
+    "investigations": [],
+    "reorders": [],
+    "approval_queue": [],
+    "cleared_anomalies": [],
+    "withdrawn_reorders": [],
+    "flagged_reorders": []
+   },
+   "sales": [
+    {
+     "day": "2026-03-09",
+     "sales_channel": "ST05",
+     "sales_channel_name": "Northgate Store",
+     "quantity_sold": 158,
+     "net_sales": 5646.92
+    }
+   ],
+   "inventory": [
+    {
+     "day": "2026-03-09",
+     "sales_channel": "ST05",
+     "sales_channel_name": "Northgate Store",
+     "skus_in_stock": 300,
+     "on_hand": 12103
+    }
+   ],
+   "decisions": []
+  },
+  {
+   "outcome": {
+    "day": "2026-03-10",
+    "uploads": [
+     {
+      "upload_id": "ST05-2026-03-10-inventory-001",
+      "sales_channel": "ST05",
+      "day": "2026-03-10",
+      "kind": "inventory",
+      "uploader": "manager.st05@cobalthome.example",
+      "status": "accepted",
+      "processed_at": "2026-03-10T21:00:00",
+      "defects": [],
+      "superseded_by": null,
+      "history": [
+       {
+        "changed_at": "2026-03-10T21:00:00",
+        "status": "accepted"
+       }
+      ]
+     },
+     {
+      "upload_id": "ST05-2026-03-10-sales-001",
+      "sales_channel": "ST05",
+      "day": "2026-03-10",
+      "kind": "sales",
+      "uploader": "manager.st05@cobalthome.example",
+      "status": "accepted",
+      "processed_at": "2026-03-10T21:00:00",
+      "defects": [],
+      "superseded_by": null,
+      "history": [
+       {
+        "changed_at": "2026-03-10T21:00:00",
+        "status": "accepted"
+       }
+      ]
+     }
+    ],
+    "audit_entries": [],
+    "uploader_messages": [],
+    "anomalies": [
+     {
+      "anomaly_id": "stockout_risk:ST05:CH-0026:2026-03-10",
+      "day": "2026-03-10",
+      "sales_channel": "ST05",
+      "kind": "stockout_risk",
+      "sku": "CH-0026",
+      "on_hand": 25,
+      "average_daily_units": 1.56,
+      "sales_days": 9,
+      "days_of_cover": 16.1,
+      "lead_time_days": 21
+     }
+    ],
+    "investigations": [
+     {
+      "investigation_id": "INV-stockout_risk:ST05:CH-0026:2026-03-10",
+      "anomaly": {
+       "anomaly_id": "stockout_risk:ST05:CH-0026:2026-03-10",
+       "day": "2026-03-10",
+       "sales_channel": "ST05",
+       "kind": "stockout_risk",
+       "sku": "CH-0026",
+       "on_hand": 25,
+       "average_daily_units": 1.56,
+       "sales_days": 9,
+       "days_of_cover": 16.1,
+       "lead_time_days": 21
+      },
+      "investigated_at": "2026-03-10T21:00:00",
+      "investigated_by": "Analyst agent",
+      "cause": "Not investigated: no model key is set, so an offline scripted model stood in.",
+      "evidence": [
+       "See the statistics that flagged the Anomaly."
+      ],
+      "recommended_action": {
+       "kind": "reorder",
+       "description": "Reorder the SKU; the inventory planner decides in the Approval Queue."
+      },
+      "data_problem": null
+     }
+    ],
+    "reorders": [
+     {
+      "action_id": "A-00001",
+      "queued_at": "2026-03-10T21:00:00",
+      "investigation_id": "INV-stockout_risk:ST05:CH-0026:2026-03-10",
+      "sales_channel": "ST05",
+      "sku": "CH-0026",
+      "sku_name": "Matte Basket, Sage",
+      "supplier_code": "SUP02",
+      "supplier_name": "Lumen & Co Lighting",
+      "quantity": 48,
+      "unit_cost": 19.31,
+      "cost": 926.88,
+      "subject": "Stockout risk flagged: Reorder proposed",
+      "reason": "Days of cover fell below the Lead Time. Not investigated: no model key is set, so an offline scripted model stood in.",
+      "status": "pending",
+      "decided_at": null,
+      "decided_by": null,
+      "note": null,
+      "reorder_id": null,
+      "audit_entry_id": null,
+      "replaced_by": null,
+      "withdrawn_because": null,
+      "expires_at": "2026-03-12T21:00:00"
+     }
+    ],
+    "approval_queue": [
+     {
+      "action_id": "A-00001",
+      "queued_at": "2026-03-10T21:00:00",
+      "investigation_id": "INV-stockout_risk:ST05:CH-0026:2026-03-10",
+      "sales_channel": "ST05",
+      "sku": "CH-0026",
+      "sku_name": "Matte Basket, Sage",
+      "supplier_code": "SUP02",
+      "supplier_name": "Lumen & Co Lighting",
+      "quantity": 48,
+      "unit_cost": 19.31,
+      "cost": 926.88,
+      "subject": "Stockout risk flagged: Reorder proposed",
+      "reason": "Days of cover fell below the Lead Time. Not investigated: no model key is set, so an offline scripted model stood in.",
+      "status": "pending",
+      "decided_at": null,
+      "decided_by": null,
+      "note": null,
+      "reorder_id": null,
+      "audit_entry_id": null,
+      "replaced_by": null,
+      "withdrawn_because": null,
+      "expires_at": "2026-03-12T21:00:00"
+     }
+    ],
+    "cleared_anomalies": [],
+    "withdrawn_reorders": [],
+    "flagged_reorders": []
+   },
+   "sales": [
+    {
+     "day": "2026-03-10",
+     "sales_channel": "ST05",
+     "sales_channel_name": "Northgate Store",
+     "quantity_sold": 169,
+     "net_sales": 5905.63
+    }
+   ],
+   "inventory": [
+    {
+     "day": "2026-03-10",
+     "sales_channel": "ST05",
+     "sales_channel_name": "Northgate Store",
+     "skus_in_stock": 300,
+     "on_hand": 11934
+    }
+   ],
+   "decisions": [
+    {
+     "reorder": {
+      "action_id": "A-00001",
+      "queued_at": "2026-03-10T21:00:00",
+      "investigation_id": "INV-stockout_risk:ST05:CH-0026:2026-03-10",
+      "sales_channel": "ST05",
+      "sku": "CH-0026",
+      "sku_name": "Matte Basket, Sage",
+      "supplier_code": "SUP02",
+      "supplier_name": "Lumen & Co Lighting",
+      "quantity": 48,
+      "unit_cost": 19.31,
+      "cost": 926.88,
+      "subject": "Stockout risk flagged: Reorder proposed",
+      "reason": "Days of cover fell below the Lead Time. Not investigated: no model key is set, so an offline scripted model stood in.",
+      "status": "approved",
+      "decided_at": "2026-03-11T21:00:00",
+      "decided_by": "inventory planner (recorded)",
+      "note": null,
+      "reorder_id": "RO-00001",
+      "audit_entry_id": 1,
+      "replaced_by": null,
+      "withdrawn_because": null,
+      "expires_at": "2026-03-12T21:00:00"
+     },
+     "audit_entries": [
+      {
+       "entry_id": 1,
+       "recorded_at": "2026-03-11T21:00:00",
+       "action": "reorder",
+       "tier": 2,
+       "triggered_by": "Stockout risk flagged: Reorder proposed (INV-stockout_risk:ST05:CH-0026:2026-03-10); approved by inventory planner (recorded)",
+       "taken_by": "inventory planner (recorded)",
+       "summary": "Placed Reorder RO-00001: 48 units of CH-0026 for ST05 from Lumen & Co Lighting, cost 926.88",
+       "upload_id": null,
+       "defect": null,
+       "undo": {
+        "operation": "cancel_reorder",
+        "upload_id": null,
+        "entry_id": null,
+        "reorder_id": "RO-00001",
+        "description": "Cancel Reorder RO-00001 in the ERP and tell Lumen & Co Lighting. A cancelled Reorder is never placed again by an undo."
+       },
+       "investigation_id": "INV-stockout_risk:ST05:CH-0026:2026-03-10",
+       "undoes": null,
+       "undone_by": null
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

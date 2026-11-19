@@ -22,6 +22,10 @@ _Avoid_: Guest, demo user, user
 The default public demo, which steps through recorded Ops Days with no model and no key.
 _Avoid_: Demo mode, playback, recording
 
+**Recording**:
+The outcomes of a few Ops Days kept from one run of a seeded sandbox (each stage's results, the BI data loaded, and any Approval taken afterwards), stored in the repository for Replay Mode to step through. A Recording is what Replay Mode plays; it is never a name for Replay Mode itself.
+_Avoid_: Replay, tape, snapshot
+
 **Live Mode**:
 The public demo in which a Visitor runs Ops Days against real models in their own sandbox.
 _Avoid_: Sandbox mode, interactive mode
