@@ -540,10 +540,9 @@ def grade_supersede(
                 withdrawn = queued.status is ApprovalStatus.WITHDRAWN
                 if withdrawn != (effect is SupersedeEffect.WITHDRAWN):
                     problems.append(f"{queued.action_id} is {queued.status.value}")
-                if (queued.action_id in flagged) != (effect is SupersedeEffect.FLAGGED):
-                    problems.append(
-                        f"{queued.action_id} was {'flagged' if queued.action_id in flagged else 'not flagged'}"
-                    )
+                was_flagged = queued.action_id in flagged
+                if was_flagged != (effect is SupersedeEffect.FLAGGED):
+                    problems.append(f"{queued.action_id} was {'flagged' if was_flagged else 'not flagged'}")
                 placed = in_erp.get(queued.reorder_id) if queued.reorder_id is not None else None
                 if effect is SupersedeEffect.FLAGGED and (
                     placed is None or placed.status is not ReorderStatus.PLACED

@@ -1,0 +1,69 @@
+{
+  "id": "supersede-flags-placed-reorder",
+  "description": "A demand surge drains a SKU at ST02 and detection flags a stockout risk on 2026-03-10. With an Auto-approval Limit of 100,000 the recommended Reorder is approved by rule and placed in the ERP. ST02's Uploader then resends the day's inventory Upload counting a Restock the first one missed. The stockout risk no longer holds, so it is cleared, but the Reorder already went to the Supplier: it is flagged for a person and stays placed in the ERP, never cancelled automatically.",
+  "tags": [
+    "analyst",
+    "ops",
+    "stockout_risk",
+    "supersede",
+    "reorder",
+    "auto-approval",
+    "store"
+  ],
+  "seed": 42,
+  "first_day": "2026-03-02",
+  "last_day": "2026-03-12",
+  "last_ops_day": "2026-03-10",
+  "sales_channels": [
+    "ST02"
+  ],
+  "upload_kinds": [
+    "sales",
+    "inventory"
+  ],
+  "planted": {
+    "resubmissions": [
+      {
+        "sales_channel": "ST02",
+        "day": "2026-03-10",
+        "upload_kind": "inventory",
+        "resubmission_kind": "restock_counted"
+      }
+    ],
+    "anomalies": [
+      {
+        "kind": "stockout_risk",
+        "sales_channel": "ST02",
+        "day": "2026-03-12",
+        "cause": "demand_surge"
+      }
+    ]
+  },
+  "auto_approval_limit": 100000.0,
+  "expected_actions": [
+    {
+      "sales_channel": "ST02",
+      "anomaly_kind": "stockout_risk",
+      "action": "reorder",
+      "tier": 2,
+      "approval": "auto_approved",
+      "after_supersede": "flagged"
+    }
+  ],
+  "expected": [
+    {
+      "sales_channel": "ST02",
+      "day": "2026-03-10",
+      "upload_kind": "inventory",
+      "submission": 1,
+      "status": "superseded"
+    },
+    {
+      "sales_channel": "ST02",
+      "day": "2026-03-10",
+      "upload_kind": "inventory",
+      "submission": 2,
+      "status": "accepted"
+    }
+  ]
+}

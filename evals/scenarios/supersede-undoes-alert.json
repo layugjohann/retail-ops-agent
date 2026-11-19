@@ -1,0 +1,74 @@
+{
+  "id": "supersede-undoes-alert",
+  "description": "A demand surge drains a SKU at ST02 and detection flags a stockout risk on 2026-03-10. A Reorder of 60 units is already open, so the Analyst recommends an alert, a Tier 1 Action. ST02's Uploader then resends the day's inventory Upload counting a Restock the first one missed. The stockout risk no longer holds against the resubmission, so it is cleared and the alert is undone through the Audit Log as a new entry.",
+  "tags": [
+    "analyst",
+    "ops",
+    "stockout_risk",
+    "supersede",
+    "alert",
+    "open-reorder",
+    "store"
+  ],
+  "seed": 42,
+  "first_day": "2026-03-02",
+  "last_day": "2026-03-12",
+  "last_ops_day": "2026-03-10",
+  "sales_channels": [
+    "ST02"
+  ],
+  "upload_kinds": [
+    "sales",
+    "inventory"
+  ],
+  "planted": {
+    "resubmissions": [
+      {
+        "sales_channel": "ST02",
+        "day": "2026-03-10",
+        "upload_kind": "inventory",
+        "resubmission_kind": "restock_counted"
+      }
+    ],
+    "anomalies": [
+      {
+        "kind": "stockout_risk",
+        "sales_channel": "ST02",
+        "day": "2026-03-12",
+        "cause": "demand_surge"
+      }
+    ]
+  },
+  "auto_approval_limit": 100000.0,
+  "open_reorders": [
+    {
+      "sales_channel": "ST02",
+      "quantity": 60
+    }
+  ],
+  "expected_actions": [
+    {
+      "sales_channel": "ST02",
+      "anomaly_kind": "stockout_risk",
+      "action": "alert",
+      "tier": 1,
+      "after_supersede": "undone"
+    }
+  ],
+  "expected": [
+    {
+      "sales_channel": "ST02",
+      "day": "2026-03-10",
+      "upload_kind": "inventory",
+      "submission": 1,
+      "status": "superseded"
+    },
+    {
+      "sales_channel": "ST02",
+      "day": "2026-03-10",
+      "upload_kind": "inventory",
+      "submission": 2,
+      "status": "accepted"
+    }
+  ]
+}
