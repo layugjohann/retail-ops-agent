@@ -5,7 +5,8 @@
 **Blocked by:** 04, 13
 **Stacked on:** issue/13-more-anomaly-kinds
 
-**Status:** in-progress
+**Status:** awaiting-merge
+**Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/13
 
 - [ ] The generator can plant a cases-instead-of-units Upload that passes validation
 - [ ] Data Problem is a structured conclusion an Investigation can reach
@@ -26,3 +27,7 @@ Usage: Implementer 116 input, 65,277 output, 214,741 cache creation, 8,991,551 c
 **Gate passed**: every command exited 0 (log: `.sandcastle/logs/gate-14-2026-11-19T10-19-00-942Z.log`).
 
 Usage: Body writer 2 input, 1,671 output, 56,277 cache creation, 11,842 cache read.
+
+**Pull Request opened**: https://github.com/layugjohann/retail-ops-agent/pull/13
+
+Stacked on Base Issue 13: this Pull Request targets `issue/13-more-anomaly-kinds`, the branch of https://github.com/layugjohann/retail-ops-agent/pull/12. Merge that Pull Request first.
