@@ -23,7 +23,7 @@ from retail_ops_agent.generator import (
     generate_history,
     generate_uploads,
 )
-from retail_ops_agent.notifier import LogNotifier
+from retail_ops_agent.notifier import LogNotifier, Notifier
 from retail_ops_agent.ops_day import Models, OpsDay
 from retail_ops_agent.uploads import UploadKind
 from retail_ops_agent.views import OpsDayOutcome
@@ -122,7 +122,9 @@ class Sandbox:
         upload_kinds: Sequence[UploadKind] = tuple(UploadKind),
         auto_approval_limit: float = DEFAULT_AUTO_APPROVAL_LIMIT,
         erp: ErpClient | None = None,
+        notifier: Notifier | None = None,
     ) -> None:
+        """notifier receives the sandbox's messages to Uploaders and alerts; a LogNotifier by default."""
         catalog = generate_catalog(seed)
         self._generated = generate_uploads(
             generate_history(catalog, first_day, days, anomalies, lookalikes),
@@ -136,7 +138,7 @@ class Sandbox:
         self.ops_day = OpsDay(
             models=models,
             erp=erp if erp is not None else InMemoryErp(catalog),
-            notifier=LogNotifier(),
+            notifier=notifier if notifier is not None else LogNotifier(),
             data_source=data_source,
             clock=self._clock,
             auto_approval_limit=auto_approval_limit,

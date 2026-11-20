@@ -36,6 +36,7 @@ from retail_ops_agent.models import (
     offline_intake_model,
     offline_ops_model,
 )
+from retail_ops_agent.notifier import Notifier
 from retail_ops_agent.ops_day import Models
 from retail_ops_agent.sandbox import Sandbox
 from retail_ops_agent.uploads import UploadKind
@@ -84,24 +85,32 @@ def offline_models() -> Models:
     return Models(intake=offline_intake_model(), analyst=offline_analyst_model(), ops=offline_ops_model())
 
 
-def new_live_sandbox(seeding_models: Models | None = None) -> Sandbox:
-    """A fresh sandbox for one Visitor, held only in memory, with its first SEEDED_DAYS run.
+def new_live_sandbox(
+    seeding_models: Models | None = None,
+    *,
+    notifier: Notifier | None = None,
+    days: int = DAYS,
+    seeded_days: int = SEEDED_DAYS,
+) -> Sandbox:
+    """A fresh sandbox for one Visitor, held only in memory, with its first seeded_days run.
 
     seeding_models run those first days; the offline scripted model by default, so building a
-    sandbox makes no model calls.
+    sandbox makes no model calls. notifier receives its messages to Uploaders and alerts. days is how
+    many days are generated in all; at least seeded_days.
     """
     models = seeding_models or offline_models()
     sandbox = Sandbox(
         seed=SEED,
         models=models,
         first_day=FIRST_DAY,
-        days=DAYS,
+        days=max(days, seeded_days),
         data_source=InMemoryDataSource(),
         defects=PLANTED_DEFECTS,
         resubmissions=RESUBMISSIONS,
         anomalies=PLANTED_ANOMALIES,
+        notifier=notifier,
     )
-    for _ in range(SEEDED_DAYS):
+    for _ in range(seeded_days):
         sandbox.run_day()
     return sandbox
 

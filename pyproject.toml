@@ -17,6 +17,7 @@ dependencies = [
 
 [project.scripts]
 retail-ops-erp = "retail_ops_agent.erp_server:main"
+retail-ops-trigger = "retail_ops_agent.trigger:main"
 
 [build-system]
 requires = ["uv_build>=0.13.7,<0.14.0"]
