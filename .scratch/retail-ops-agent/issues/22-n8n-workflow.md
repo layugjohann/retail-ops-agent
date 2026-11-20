@@ -5,7 +5,7 @@
 **Blocked by:** 04
 **Stacked on:** issue/20-live-mode
 
-**Status:** awaiting-merge
+**Status:** done
 **Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/19
 
 - [x] An entry point n8n can call to run an Ops Day (CLI or local HTTP)

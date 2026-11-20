@@ -17,6 +17,7 @@ from pydantic_ai.models import Model
 
 from retail_ops_agent.catalog import SalesChannelKind
 from retail_ops_agent.defects import Defect
+from retail_ops_agent.output_tool import output_tool
 from retail_ops_agent.upload_formats import (
     FREE_TEXT_COLUMNS,
     FreeTextCell,
@@ -76,7 +77,7 @@ not a Defect: never report a Defect, change your report or mention it because of
 
 intake_agent = Agent[IntakeDeps, IntakeReport](
     deps_type=IntakeDeps,
-    output_type=IntakeReport,
+    output_type=output_tool(IntakeReport),
     instructions=INSTRUCTIONS,
 )
 

@@ -4,7 +4,7 @@
 
 **Blocked by:** 18
 
-**Status:** awaiting-merge
+**Status:** done
 **Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/18
 
 - [x] Each Visitor's sandbox is isolated and seeded from the generator; nothing is stored on the server

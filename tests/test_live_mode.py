@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import tempfile
 from collections.abc import Mapping
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
 import pytest
-from pydantic_ai.exceptions import ModelRateLimitError
-from pydantic_ai.messages import ModelMessage, ModelResponse
+from pydantic_ai.exceptions import ModelRateLimitError, UnexpectedModelBehavior
+from pydantic_ai.messages import ModelMessage, ModelResponse, ToolCallPart
+from pydantic_ai.models import ModelRequestParameters
 from pydantic_ai.models.function import AgentInfo, FunctionModel
+from pydantic_ai.models.wrapper import WrapperModel
+from pydantic_ai.settings import ModelSettings
 
 from retail_ops_agent import data_source, live
 from retail_ops_agent.live import (
@@ -23,6 +27,7 @@ from retail_ops_agent.live import (
     run_live_day,
     visitor_models,
 )
+from retail_ops_agent.models import offline_analyst_model, offline_intake_model, offline_ops_model
 from retail_ops_agent.ops_day import Models
 from retail_ops_agent.sandbox import Sandbox
 from retail_ops_agent.uploads import UploadKind, UploadStatus
@@ -240,3 +245,59 @@ def test_a_visitors_key_builds_their_models_and_the_label_never_shows_the_key(pr
     assert models.intake is models.analyst is models.ops
     assert "secret-123" not in label
     assert "your key" in label
+
+
+class GptOssLike(WrapperModel):
+    """Answers like gpt-oss-120b on Groq: it gives its final answer through a tool it calls "json",
+    whatever the agent named its output tool."""
+
+    async def request(
+        self,
+        messages: list[ModelMessage],
+        model_settings: ModelSettings | None,
+        model_request_parameters: ModelRequestParameters,
+    ) -> ModelResponse:
+        response = await super().request(messages, model_settings, model_request_parameters)
+        output_tools = {tool.name for tool in model_request_parameters.output_tools}
+        parts = [
+            replace(part, tool_name="json")
+            if isinstance(part, ToolCallPart) and part.tool_name in output_tools
+            else part
+            for part in response.parts
+        ]
+        return replace(response, parts=parts)
+
+
+def test_a_model_that_answers_through_a_tool_named_json_runs_every_agent(sandbox: Sandbox) -> None:
+    models = Models(
+        intake=GptOssLike(offline_intake_model()),
+        analyst=GptOssLike(offline_analyst_model()),
+        ops=GptOssLike(offline_ops_model()),
+    )
+
+    outcomes = [sandbox.run_day(models) for _ in range(len(sandbox.days) - SEEDED_DAYS)]
+
+    # Every agent ran: Intake on each Upload, the Analyst and Ops agents on each Anomaly.
+    assert any(outcome.anomalies for outcome in outcomes)
+    assert any(outcome.reorders for outcome in outcomes)
+
+
+def test_a_shared_key_day_that_fails_for_another_reason_gives_its_slot_back(
+    sandbox: Sandbox, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def misbehaving(_messages: list[ModelMessage], _info: AgentInfo) -> ModelResponse:
+        raise UnexpectedModelBehavior("Tool 'json' exceeded max retries count of 1")
+
+    model = FunctionModel(misbehaving)
+
+    def shared_models(_env: Mapping[str, str]) -> tuple[Models, str]:
+        return Models(intake=model, analyst=model, ops=model), "shared"
+
+    monkeypatch.setattr(live, "models_from_environment", shared_models)
+    limiter = _limiter(runs=1)
+
+    with pytest.raises(UnexpectedModelBehavior):
+        run_live_day(sandbox, env={}, limiter=limiter)
+
+    assert limiter.remaining() == 1
+    assert sandbox.next_day == NEXT_DAY

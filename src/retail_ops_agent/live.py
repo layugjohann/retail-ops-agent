@@ -180,6 +180,13 @@ class SharedKeyLimiter:
             self._runs.append(self._now())
             return True
 
+    def release(self) -> None:
+        """Give back the latest run: the Ops Day it was taken for failed without using the shared
+        key's quota (a model error, a network failure), so it should not count against Visitors."""
+        with self._lock:
+            if self._runs:
+                self._runs.pop()
+
     def exhaust(self) -> None:
         """The provider itself refused the shared key: treat the window as used up."""
         with self._lock:
@@ -263,4 +270,7 @@ def run_live_day(
             "The shared free-tier key hit its provider's rate limit. Add your own key to keep running "
             "Ops Days."
         ) from refused
+    except Exception:
+        limiter.release()
+        raise
     return LiveRun(outcome, f"{label} (shared key)", used_shared_key=True)

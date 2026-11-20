@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 
 import pandas as pd
 import pytest
 import streamlit as st
+from pydantic_ai.exceptions import UnexpectedModelBehavior
+from pydantic_ai.messages import ModelMessage, ModelResponse
+from pydantic_ai.models.function import AgentInfo, FunctionModel
 from streamlit.testing.v1 import AppTest
+
+from retail_ops_agent import live
+from retail_ops_agent.ops_day import Models
 
 APP = Path(__file__).resolve().parent.parent / "dashboard" / "app.py"
 
@@ -255,3 +262,24 @@ def test_live_mode_asks_for_the_visitors_own_key_once_the_shared_limit_is_reache
     assert not app.button(key="run-day").disabled
     shown = " ".join(str(e.value) for e in [*app.markdown, *app.caption, *app.success, *app.warning])
     assert "gsk-visitor-secret" not in shown
+
+
+@pytest.mark.usefixtures("fresh_sandbox")
+def test_live_mode_a_model_that_misbehaves_shows_a_message_not_a_traceback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def misbehaving(_messages: list[ModelMessage], _info: AgentInfo) -> ModelResponse:
+        raise UnexpectedModelBehavior("Tool 'json' exceeded max retries count of 1")
+
+    model = FunctionModel(misbehaving)
+
+    def shared_models(_env: Mapping[str, str]) -> tuple[Models, str]:
+        return Models(intake=model, analyst=model, ops=model), "shared"
+
+    monkeypatch.setattr(live, "models_from_environment", shared_models)
+    app = _live_app()
+
+    app.button(key="run-day").click().run()
+
+    assert not app.exception
+    assert any("UnexpectedModelBehavior" in e.value and "run the day again" in e.value for e in app.error)
