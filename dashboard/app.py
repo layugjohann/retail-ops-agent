@@ -16,7 +16,7 @@ from datetime import timedelta
 
 import pandas as pd
 import streamlit as st
-from pydantic_ai.exceptions import ModelAPIError
+from pydantic_ai.exceptions import AgentRunError
 
 from retail_ops_agent.approval_queue import QueuedReorder
 from retail_ops_agent.hours_saved import HoursSaved
@@ -124,7 +124,7 @@ def _sandbox_controls(sandbox: Sandbox) -> None:
             st.session_state[OWN_KEY_NEEDED] = str(needed)
             st.session_state[LAST_RUN] = None
             st.rerun()
-        except ModelAPIError as failed:
+        except AgentRunError as failed:
             st.error(
                 f"The model could not run the Ops Day ({type(failed).__name__}). Check the key and model, "
                 "then run the day again; its Uploads are kept."
