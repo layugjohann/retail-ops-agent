@@ -4,7 +4,8 @@
 
 **Blocked by:** 20
 
-**Status:** ready-for-agent
+**Status:** awaiting-merge
+**Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/20
 
 Found while doing Issue 21. The first real Intake call of an Ops Day fails: gpt-oss-120b calls `check_upload` correctly, then returns its answer through a tool it calls `json` instead of pydantic-ai's output tool `final_result`. It does this again on the retry, so the run fails with `UnexpectedModelBehavior` ("Unknown tool name: 'json'"). The dashboard only catches `ModelAPIError`, so the Visitor sees a raw traceback, and the failed run still uses up a shared-key slot. Probes against the real model: `NativeOutput` is refused alongside function tools, `PromptedOutput` fails the same way about half the time (with a `JSON` tool), and `ToolOutput(..., name="json")` succeeded 4 out of 4 times.
 
