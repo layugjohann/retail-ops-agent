@@ -5,7 +5,8 @@
 **Blocked by:** 04
 **Stacked on:** issue/20-live-mode
 
-**Status:** in-progress
+**Status:** awaiting-merge
+**Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/19
 
 - [x] An entry point n8n can call to run an Ops Day (CLI or local HTTP)
 - [x] A Docker Compose file for local n8n
@@ -29,3 +30,7 @@ Usage: Implementer 10 input, 1,129 output, 24,138 cache creation, 149,051 cache 
 **Gate passed**: every command exited 0 (log: `.sandcastle/logs/gate-22-2026-11-20T05-23-56-082Z.log`).
 
 Usage: Body writer 2 input, 1,472 output, 34,238 cache creation, 11,842 cache read.
+
+**Pull Request opened**: https://github.com/layugjohann/retail-ops-agent/pull/19
+
+Stacked on Base Issue 20: this Pull Request targets `issue/20-live-mode`, the branch of https://github.com/layugjohann/retail-ops-agent/pull/18. Merge that Pull Request first.
