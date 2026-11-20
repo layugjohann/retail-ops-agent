@@ -88,6 +88,8 @@ _ANOMALY: TypeAdapter[Anomaly] = TypeAdapter(Anomaly)
 
 # Upload statuses whose rows are in the BI data.
 _LOADED = "'accepted', 'safe_fixed'"
+# Rows per INSERT statement when loading an Upload.
+_INSERT_BATCH = 500
 
 
 class BiStore:
@@ -266,17 +268,17 @@ class BiStore:
     def load_sales(self, upload: Upload, lines: list[SalesLine]) -> None:
         if not lines:
             return
-        self._db.executemany(
-            "INSERT INTO sales VALUES (?, ?, ?, ?, ?, ?)",
+        self._insert(
+            "sales",
             [
-                [
+                (
                     line.day,
                     upload.sales_channel,
                     line.sku,
                     line.quantity_sold,
                     line.net_sales,
                     upload.upload_id,
-                ]
+                )
                 for line in lines
             ],
         )
@@ -284,10 +286,20 @@ class BiStore:
     def load_inventory(self, upload: Upload, lines: list[StockLine]) -> None:
         if not lines:
             return
-        self._db.executemany(
-            "INSERT INTO inventory VALUES (?, ?, ?, ?, ?)",
-            [[line.day, upload.sales_channel, line.sku, line.on_hand, upload.upload_id] for line in lines],
+        self._insert(
+            "inventory",
+            [(line.day, upload.sales_channel, line.sku, line.on_hand, upload.upload_id) for line in lines],
         )
+
+    def _insert(self, table: str, rows: list[tuple[object, ...]]) -> None:
+        """Insert rows in one multi-row statement; DuckDB's executemany is slow row by row."""
+        for start in range(0, len(rows), _INSERT_BATCH):
+            batch = rows[start : start + _INSERT_BATCH]
+            placeholders = "(" + ", ".join("?" * len(batch[0])) + ")"
+            self._db.execute(
+                f"INSERT INTO {table} VALUES " + ", ".join([placeholders] * len(batch)),
+                [value for row in batch for value in row],
+            )
 
     def uploads(self) -> list[UploadOutcome]:
         rows = self._db.execute(

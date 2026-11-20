@@ -32,8 +32,17 @@ Approval. Each Recording names the model its agents ran on.
 
 `make record` runs each Recording's seeded sandbox through the Ops Day boundary again and rewrites
 its JSON. With a free-tier key in `.env.local` the agents use that model, paced for its rate limit;
-without one, the offline scripted model stands in. The sidebar switches to Live Mode, a seeded
-sandbox run through the Ops Day boundary.
+without one, the offline scripted model stands in.
+
+The sidebar switches to Live Mode, where each Visitor gets their own sandbox of Cobalt Home (BI
+store, fake ERP, clock and Uploads), held only in their session's memory and seeded from the
+generator with the offline scripted model. "Run day" processes the next day's Uploads with real
+models; the Visitor can approve or reject Reorders, undo Audit Log entries, upload or edit a CSV of
+their own (broken or malicious ones included) and reset. Ops Days first use the shared free-tier key
+from the environment (`GROQ_API_KEY` or `GEMINI_API_KEY`), limited across every Visitor to
+`LIVE_SHARED_RUNS` (40) Ops Days every `LIVE_SHARED_WINDOW_HOURS` (24); once that limit or the
+provider's own is reached, the Visitor is asked for their own Groq or Gemini key, which is used for
+their Ops Days only and never stored.
 
 ## Discovery and Hours Saved
 

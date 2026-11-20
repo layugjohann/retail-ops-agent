@@ -140,8 +140,11 @@ class OpsDay:
         self._data_source.put(upload)
         return upload.upload_id
 
-    def run_ops_day(self, day: date) -> OpsDayOutcome:
+    def run_ops_day(self, day: date, *, models: Models | None = None) -> OpsDayOutcome:
         """Process the day: Intake, then Load, then Detect, then the Analyst, then Ops (ADR 0003).
+
+        models, if given, are the agents' models for this Ops Day only (Live Mode switches from a
+        shared key to a Visitor's own); otherwise the Ops Day's own.
 
         The handoff between stages is this fixed pipeline; no model decides what runs next.
 
@@ -188,6 +191,7 @@ class OpsDay:
         and its Uploader is messaged. The day's other Anomalies are investigated only if they still
         show without those Uploads.
         """
+        models = models or self._models
         self._expire()
         processed = self._bi.processed_upload_ids()
         days = sorted({d for d in self._bi.upload_days() if d < day} | {day})
@@ -215,7 +219,7 @@ class OpsDay:
                     superseded.append((earlier, upload))
                 self._bi.supersede(earlier, upload.upload_id, self._clock.now())
                 touched.append(earlier)
-            result = run_intake(upload, channel_kinds[upload.sales_channel], known_skus, self._models.intake)
+            result = run_intake(upload, channel_kinds[upload.sales_channel], known_skus, models.intake)
             if result.defects:
                 status = UploadStatus.QUARANTINED
             elif result.safe_fixed:
@@ -247,7 +251,7 @@ class OpsDay:
                 anomaly,
                 bi=self._bi,
                 erp=self._erp,
-                model=self._models.analyst,
+                model=models.analyst,
                 investigated_at=self._clock.now(),
             )
             if investigation.data_problem is not None:
@@ -264,7 +268,7 @@ class OpsDay:
                     still_showing = {a.anomaly_id for a in self._detect(day)}
                 continue
             sku = skus.get(anomaly.sku) if anomaly.sku is not None else None
-            proposal = propose_action(investigation, sku, self._models.ops)
+            proposal = propose_action(investigation, sku, models.ops)
             cost = (
                 _cost(sku, proposal.quantity)
                 if sku is not None and proposal.kind is ProposedActionKind.REORDER
