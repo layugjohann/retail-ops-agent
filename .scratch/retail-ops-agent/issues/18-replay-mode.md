@@ -4,7 +4,7 @@
 
 **Blocked by:** 10
 
-**Status:** awaiting-merge
+**Status:** done
 **Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/16
 
 - [x] Ops Day outcomes can be recorded and stored in the repository
