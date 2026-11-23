@@ -1,7 +1,15 @@
 # retail-ops-agent
 
-**Three agents that turn a retailer's messy daily CSV Uploads into trusted BI data, then into
-investigated, tiered Actions, with a human approving anything that costs money.**
+At a retailer with a handful of stores and an online shop, someone starts every morning opening
+CSVs: fixing headers, chasing store managers whose files can't be fixed without asking, and working
+out whether an odd number is the business or the data. Meanwhile the inventory planner works out
+stock cover in a spreadsheet and keys Reorders into the ERP by hand.
+
+I picked this problem from a real job posting for a Forward Deployed Engineer (AI Enhanced) at a
+nutritional supplement company, and built the prototype I'd want to show up with on day one.
+
+**Three agents turn those messy daily CSV Uploads into trusted BI data, then into investigated,
+tiered Actions, with a human approving anything that costs money.**
 
 **Live demo (Replay Mode):** https://cobalt-home-ops.streamlit.app/
 
@@ -29,8 +37,8 @@ Audit Log with undo, and **Hours Saved**, with every assumption behind it shown 
 
 ## What it shows, against the job posting
 
-The target role is a "Forward Deployed Engineer (AI Enhanced)" at a retail and e-commerce company
-whose stack is unknown. Each responsibility in the posting, and where this project shows it:
+The posting doesn't say what systems the company runs, so I built against seams rather than
+guessing a stack. Here's each responsibility it lists, and where I've shown it:
 
 | Responsibility in the posting | Where it is in this project |
 | --- | --- |
@@ -47,6 +55,29 @@ Two things the posting implies but doesn't list:
   exact Ground Truth grade each agent, an LLM judge grades free text against a Rubric, and the hard
   rule "no Tier 2 Action without Approval" must hold in 100% of Scenarios. Prompt injections planted
   in Uploads are graded for having no effect.
+
+## Why I built it this way
+
+**The demo opens on Replay Mode.** On a free tier, one Ops Day takes minutes, because every model
+call is paced for the rate limit, and live runs often hit the limit anyway. A reviewer clicking the
+link shouldn't have to wait that long, or paste in an API key, to see what the agents do. So the
+demo plays back Recordings of real Ops Days, each naming the model it ran on: real model output,
+with no wait and no key. Live Mode is one click away in the sidebar for anyone who wants to run a
+day themselves.
+
+**A rule, not the model, decides when money gets spent.** An inventory planner would never trust a
+system where a model can place a Reorder on its own say-so. So the model only recommends an Action,
+and a fixed rule table decides its Tier: alerts and Safe Fixes run on their own and can be undone,
+and Reorders wait for Approval unless they are under the Auto-approval Limit. A model's
+self-reported confidence can't be checked, and text planted in an Upload can talk it up; a rule
+can't be talked into anything ([ADR 0002](docs/adr/0002-action-tiers-are-rules-not-confidence.md)).
+
+**Free-tier models, on purpose.** This had to cost nothing to build, run and host, so the agents
+default to free-tier models on Groq and Gemini, and anyone can bring their own key for a frontier
+model ([ADR 0001](docs/adr/0001-zero-cost-free-tier-plus-byok.md)). That has a real cost: runs are
+slow because they're paced, tool calling is weaker, and `gpt-oss-120b` insists on returning its
+answer through a tool it calls `json`, so every agent's output tool now has that name. I treat
+this as something to measure, not hide: the evals show where the cheap model is good enough.
 
 ## Design highlights
 
@@ -138,6 +169,15 @@ The [Deployment Playbook](docs/deployment-playbook.md) is the plan for week one 
 replacing the Data Source, the ERP MCP server and the Notifier; calibrating the Anomaly thresholds
 and the Auto-approval Limit with the people who act on them; and rebuilding the baseline behind
 Hours Saved from real timings.
+
+## What I'd do next
+
+1. **A frontier-model run beside the free-tier Scorecard.** The Scorecard only means something
+   next to a baseline; I want to know where the free model is good enough.
+2. **Real timings.** Hours Saved is only as honest as the baseline behind it, and right now every
+   timing is an assumption.
+3. **A real connector.** The seams are designed for it but untested against a real system; putting
+   Shopify or Odoo behind them would prove the Playbook.
 
 ## Replay Mode
 
