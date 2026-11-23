@@ -7,6 +7,9 @@ stock cover in a spreadsheet and keys Reorders into the ERP by hand.
 
 I picked this problem from a real job posting for a Forward Deployed Engineer (AI Enhanced) at a
 nutritional supplement company, and built the prototype I'd want to show up with on day one.
+The Client here is Cobalt Home, a fictional home-goods retailer: the work the posting describes
+(messy daily CSVs, a BI system to keep trustworthy, Reorders keyed by hand) is the same at any
+multi-channel retailer, and I'd rather not invent the details of a real company's business.
 
 **Three agents turn those messy daily CSV Uploads into trusted BI data, then into investigated,
 tiered Actions, with a human approving anything that costs money.**
@@ -178,6 +181,8 @@ Hours Saved from real timings.
    timing is an assumption.
 3. **A real connector.** The seams are designed for it but untested against a real system; putting
    Shopify or Odoo behind them would prove the Playbook.
+4. **Lot and expiry tracking.** A supplement business has to sell older stock first and pull
+   expired batches, which the catalog doesn't model yet.
 
 ## Replay Mode
 

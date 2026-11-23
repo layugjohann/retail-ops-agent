@@ -1,6 +1,6 @@
 # Engagement brief
 
-> **SIMULATED.** Written as if by an engineer embedded at Cobalt Home, a fictional Client. The responsibilities come from a public job posting for a "Forward Deployed Engineer (AI Enhanced)" at a retail and e-commerce company, which is not named here.
+> **SIMULATED.** Written as if by an engineer embedded at Cobalt Home, a fictional Client. The responsibilities come from a public job posting for a "Forward Deployed Engineer (AI Enhanced)" at a nutritional supplement company that sells through retail and e-commerce, which is not named here.
 
 ## The Client
 
