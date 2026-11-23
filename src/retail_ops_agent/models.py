@@ -6,14 +6,19 @@ model stands in, so nothing needs a paid service or even a network to run.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 
+from pydantic_ai.models import Model, infer_model
 from pydantic_ai.models.test import TestModel
 
+from retail_ops_agent.evals.throttle import Throttle, ThrottledModel
 from retail_ops_agent.ops_day import Models
 
 DEFAULT_GROQ_MODEL = "groq:openai/gpt-oss-120b"
 DEFAULT_GEMINI_MODEL = "google:gemini-3.5-flash-lite"
+# Below the tightest free tier the models default to (Gemini allows 15 requests a minute), as for
+# evals.
+DEFAULT_REQUESTS_PER_MINUTE = 10.0
 
 
 def offline_intake_model() -> TestModel:
@@ -76,3 +81,17 @@ def models_from_environment(env: Mapping[str, str]) -> tuple[Models, str]:
         return Models(intake=name, analyst=name, ops=name), name
     offline = Models(intake=offline_intake_model(), analyst=offline_analyst_model(), ops=offline_ops_model())
     return offline, "offline scripted model (no key set)"
+
+
+def paced_models_from_environment(
+    env: Mapping[str, str],
+    requests_per_minute: float = DEFAULT_REQUESTS_PER_MINUTE,
+    build_model: Callable[[str], Model] = infer_model,
+) -> tuple[Models, str]:
+    """Like models_from_environment, but a real model's requests are paced for its free tier and
+    retried when rate-limited, for Ops Days run back to back (Recordings, the n8n trigger)."""
+    name = model_name_from_environment(env)
+    if name is None:
+        return models_from_environment(env)
+    model = ThrottledModel(build_model(name), Throttle(requests_per_minute))
+    return Models(intake=model, analyst=model, ops=model), name

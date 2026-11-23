@@ -42,6 +42,8 @@ trigger:
 	uv run $(if $(wildcard .env.local),--env-file .env.local,) retail-ops-trigger $(ARGS)
 
 # Local n8n in Docker on http://localhost:5678, with the exported workflow mounted at /workflows.
+# The import waits for n8n to answer, since it sets up its database on first start.
 n8n:
 	docker compose -f n8n/docker-compose.yml up -d
+	@echo "Waiting for n8n..."; for i in $$(seq 60); do curl -sf http://localhost:5678/healthz >/dev/null && break; sleep 2; done
 	docker compose -f n8n/docker-compose.yml exec n8n n8n import:workflow --input=/workflows/ops-day.json

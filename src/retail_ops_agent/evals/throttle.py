@@ -1,8 +1,8 @@
 """Pacing model requests to stay inside free-tier rate limits (ADR 0001).
 
 Free tiers cap requests (and tokens) per minute. A Throttle spaces requests evenly, and a model
-that is refused for a rate limit anyway waits as long as the provider asks, or backs off, and tries
-again.
+that is refused for a rate limit anyway, or told the provider is briefly overloaded (503), waits as
+long as the provider asks, or backs off, and tries again.
 """
 
 from __future__ import annotations
@@ -20,6 +20,10 @@ from pydantic_ai.settings import ModelSettings
 type Sleep = Callable[[float], Awaitable[None]]
 
 TOO_MANY_REQUESTS = 429
+# Free tiers answer this during demand spikes ("This model is currently experiencing high demand"),
+# which pass in seconds to minutes.
+SERVICE_UNAVAILABLE = 503
+RETRIED_STATUSES = {TOO_MANY_REQUESTS, SERVICE_UNAVAILABLE}
 
 
 class Throttle:
@@ -51,14 +55,15 @@ class Throttle:
         self._next_start = now + self.interval
 
 
-def _rate_limited(error: ModelAPIError) -> bool:
+def _worth_retrying(error: ModelAPIError) -> bool:
     return isinstance(error, ModelRateLimitError) or (
-        isinstance(error, ModelHTTPError) and error.status_code == TOO_MANY_REQUESTS
+        isinstance(error, ModelHTTPError) and error.status_code in RETRIED_STATUSES
     )
 
 
 class ThrottledModel(WrapperModel):
-    """A model whose requests go through a Throttle and are retried when rate-limited."""
+    """A model whose requests go through a Throttle and are retried when rate-limited or the
+    provider is briefly overloaded."""
 
     def __init__(
         self,
@@ -85,7 +90,7 @@ class ThrottledModel(WrapperModel):
             try:
                 return await self.wrapped.request(messages, model_settings, model_request_parameters)
             except ModelAPIError as error:
-                if not _rate_limited(error) or retries >= self.max_retries:
+                if not _worth_retrying(error) or retries >= self.max_retries:
                     raise
                 await self.throttle.sleep(error.retry_after or self.backoff_seconds * 2**retries)
                 retries += 1

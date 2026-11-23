@@ -4,7 +4,8 @@
 #   docker compose -f n8n/docker-compose.yml up -d     # n8n on http://localhost:5678
 services:
   n8n:
-    image: docker.n8n.io/n8nio/n8n:${N8N_VERSION:-latest}
+    # Pinned to the version the exported workflow was run on, so its node versions keep working.
+    image: docker.n8n.io/n8nio/n8n:${N8N_VERSION:-2.48.7}
     ports:
       - "127.0.0.1:5678:5678"
     environment:

@@ -10,11 +10,14 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
+from pydantic_ai.models.test import TestModel
 
 from retail_ops_agent.anomalies import AnomalyKind
 from retail_ops_agent.data_source import InMemoryDataSource
 from retail_ops_agent.defects import DefectKind
+from retail_ops_agent.evals.throttle import ThrottledModel
 from retail_ops_agent.generator import AnomalyPlan, DefectPlan
+from retail_ops_agent.models import DEFAULT_GEMINI_MODEL, paced_models_from_environment
 from retail_ops_agent.notifier import Notifier
 from retail_ops_agent.sandbox import Sandbox
 from retail_ops_agent.trigger import OpsDayTrigger, make_server
@@ -135,6 +138,27 @@ def test_an_unknown_endpoint_is_not_found(server: Server) -> None:
 
 
 # The exported workflow
+
+
+def test_a_free_tier_model_is_paced_below_its_per_minute_limit() -> None:
+    """Gemini's free tier allows 15 requests a minute; an Ops Day makes more than that in a burst."""
+    models, label = paced_models_from_environment(
+        {"GEMINI_API_KEY": "key"}, requests_per_minute=10, build_model=lambda _: TestModel()
+    )
+
+    assert label == DEFAULT_GEMINI_MODEL
+    for model in (models.intake, models.analyst, models.ops):
+        assert isinstance(model, ThrottledModel)
+        assert model.throttle.interval == 6.0
+    # One Throttle for all three agents, since they count against the same limit.
+    assert models.intake is models.analyst is models.ops
+
+
+def test_without_a_key_the_offline_scripted_model_runs_unpaced() -> None:
+    models, label = paced_models_from_environment({}, 10)
+
+    assert label.startswith("offline scripted model")
+    assert not isinstance(models.intake, ThrottledModel)
 
 
 def _workflow() -> dict[str, Any]:

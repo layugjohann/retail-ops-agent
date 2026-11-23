@@ -16,13 +16,12 @@ import argparse
 import os
 import sys
 import tempfile
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Sequence
 from datetime import date
 from enum import StrEnum
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
-from pydantic_ai.models import Model, infer_model
 
 from retail_ops_agent.action_policy import DEFAULT_AUTO_APPROVAL_LIMIT
 from retail_ops_agent.analyst import Investigation
@@ -30,10 +29,9 @@ from retail_ops_agent.anomalies import Anomaly, AnomalyKind
 from retail_ops_agent.approval_queue import QueuedReorder
 from retail_ops_agent.audit_log import AuditAction, AuditEntry
 from retail_ops_agent.defects import DefectKind
-from retail_ops_agent.evals.throttle import Throttle, ThrottledModel
 from retail_ops_agent.generator import AnomalyPlan, DefectPlan, ResubmissionKind, ResubmissionPlan
 from retail_ops_agent.hours_saved import Baseline, HoursSaved, hours_saved, load_baseline
-from retail_ops_agent.models import model_name_from_environment, models_from_environment
+from retail_ops_agent.models import DEFAULT_REQUESTS_PER_MINUTE, paced_models_from_environment
 from retail_ops_agent.ops_day import Models, OpsDay
 from retail_ops_agent.sandbox import build_sandbox
 from retail_ops_agent.uploads import UploadKind, UploadStatus
@@ -50,8 +48,6 @@ from retail_ops_agent.views import (
 RECORDINGS_DIRECTORY = Path(__file__).resolve().parent / "recordings"
 # Who takes a Recording's Approval decisions, as the Approval Queue and Audit Log record it.
 RECORDED_APPROVER = "inventory planner (recorded)"
-# Below the tightest free tier the models default to, as for evals.
-DEFAULT_REQUESTS_PER_MINUTE = 10.0
 
 
 class ReplayStage(StrEnum):
@@ -499,26 +495,13 @@ def write_recording(recording: Recording, directory: Path = RECORDINGS_DIRECTORY
     return path
 
 
-def recording_models(
-    env: Mapping[str, str],
-    requests_per_minute: float = DEFAULT_REQUESTS_PER_MINUTE,
-    build_model: Callable[[str], Model] = infer_model,
-) -> tuple[Models, str]:
-    """The environment's real model, paced for its free tier, or the offline scripted model."""
-    name = model_name_from_environment(env)
-    if name is None:
-        return models_from_environment(env)
-    model = ThrottledModel(build_model(name), Throttle(requests_per_minute))
-    return Models(intake=model, analyst=model, ops=model), name
-
-
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Record Ops Days for Replay Mode.")
     parser.add_argument("--only", action="append", help="record only this recording id (repeatable)")
     parser.add_argument("--rpm", type=float, default=DEFAULT_REQUESTS_PER_MINUTE)
     parser.add_argument("--output", type=Path, default=RECORDINGS_DIRECTORY)
     args = parser.parse_args(argv)
-    models, label = recording_models(os.environ, args.rpm)
+    models, label = paced_models_from_environment(os.environ, args.rpm)
     plans = [p for p in RECORDING_PLANS if not args.only or p.recording_id in args.only]
     for plan in plans:
         print(f"Recording {plan.recording_id} with {label}...", file=sys.stderr)
