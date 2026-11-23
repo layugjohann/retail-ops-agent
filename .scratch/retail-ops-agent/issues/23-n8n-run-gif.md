@@ -4,11 +4,11 @@
 
 **Blocked by:** 22
 
-**Status:** ready-for-human
+**Status:** done
 **Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/21
 
 - [x] Workflow imported and running locally in Docker
-- [ ] A scheduled Ops Day runs and forwards notifications
+- [x] A scheduled Ops Day runs and forwards notifications
 - [x] GIF recorded and added to the README
 
 ## Comments
@@ -26,3 +26,7 @@
 - Gemini still answered 503 "high demand", so `ThrottledModel` now retries 503s as well as 429s (`evals/throttle.py`, with a test). Back on Groq (gpt-oss-120b), whose daily limit had reset; an end-to-end run through `n8n execute` succeeded in about 2m50s.
 - The GIF is `docs/media/n8n-ops-day.gif` (534 KB, 10× speed), cropped to leave out the shell prompt, browser profile and tab titles. It is in the README under "Scheduled Ops Days with n8n".
 - Not yet verified: a run started by the schedule itself (the workflow Active, the "Every evening" node firing at its hour).
+
+**Scheduled run: accepted 2026-11-23**
+
+The recorded run started from the "Every evening" node: its edge to "Run Ops Day" carried 1 item, and the "Run now" edge carried none. Run Ops Day, Each notification and Forward notification all succeeded. Nobody watched the node fire at its hour with the workflow published, since that timing is n8n's own job. The user accepted this as enough.
