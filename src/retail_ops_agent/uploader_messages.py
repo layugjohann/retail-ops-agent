@@ -106,6 +106,13 @@ def data_problem_message(upload: Upload, defects: list[Defect]) -> str:
     )
 
 
+def _where(defect: Defect) -> str:
+    """Where to look. A missing column has no column to point at, so it is in the header."""
+    if defect.kind is DefectKind.MISSING_COLUMN:
+        return "in the header (row 1)"
+    return f"at {defect_location(defect)}"
+
+
 def _message(upload: Upload, opening: str, defects: list[Defect], note: str | None) -> str:
     lines = [
         opening,
@@ -115,7 +122,7 @@ def _message(upload: Upload, opening: str, defects: list[Defect], note: str | No
     ]
     for number, defect in enumerate(defects[:MAX_LISTED_DEFECTS], start=1):
         lines.append(
-            f"{number}. {DEFECT_NAMES[defect.kind]} at {defect_location(defect)}: {defect.detail}. "
+            f"{number}. {DEFECT_NAMES[defect.kind]} {_where(defect)}: {defect.detail}. "
             f"What to do: {FIXES[defect.kind]}"
         )
     if len(defects) > MAX_LISTED_DEFECTS:

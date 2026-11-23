@@ -2,7 +2,7 @@
  "recording_id": "01-defect-day",
  "title": "Defect day: Safe Fixes, a Quarantine and a corrected resend",
  "description": "ST02 sends sales with a renamed column, which Intake fixes safely. ST03 sends sales with a missing column, which is Quarantined with a message to its Uploader, who resends a corrected Upload that Supersedes it the next Ops Day. The Online Shop's Stock Snapshot arrives with the wrong delimiter.",
- "model": "offline scripted model (no key set)",
+ "model": "groq:openai/gpt-oss-120b",
  "seed": 7,
  "auto_approval_limit": 150.0,
  "ops_days": [
@@ -134,14 +134,14 @@
     {
      "day": "2026-11-01",
      "sales_channel": "ST02",
-     "sales_channel_name": "Northgate Store",
+     "sales_channel_name": "Riverside Store",
      "quantity_sold": 357,
      "net_sales": 12342.3
     },
     {
      "day": "2026-11-01",
      "sales_channel": "ST03",
-     "sales_channel_name": "Westfield Store",
+     "sales_channel_name": "Old Town Store",
      "quantity_sold": 195,
      "net_sales": 7159.47
     }
@@ -157,14 +157,14 @@
     {
      "day": "2026-11-01",
      "sales_channel": "ST02",
-     "sales_channel_name": "Northgate Store",
+     "sales_channel_name": "Riverside Store",
      "skus_in_stock": 300,
      "on_hand": 16176
     },
     {
      "day": "2026-11-01",
      "sales_channel": "ST03",
-     "sales_channel_name": "Westfield Store",
+     "sales_channel_name": "Old Town Store",
      "skus_in_stock": 300,
      "on_hand": 9927
     }
@@ -352,7 +352,7 @@
       "sent_at": "2026-11-02T21:00:00",
       "recipient": "manager.st03@cobalthome.example",
       "subject": "Upload ST03-2026-11-02-sales-001 is Quarantined: please correct it and resend",
-      "body": "Your sales Upload for ST03 on 2026-11-02 (ST03-2026-11-02-sales-001) is in Quarantine, so none of its rows are in the BI data yet.\n\nPlease correct the following and resend the whole file for the same day; it will replace this one.\n\n1. Missing column at column sku: column sku is missing. What to do: Add this column to the header and fill it in on every row, as in your usual export."
+      "body": "Your sales Upload for ST03 on 2026-11-02 (ST03-2026-11-02-sales-001) is in Quarantine, so none of its rows are in the BI data yet.\n\nPlease correct the following and resend the whole file for the same day; it will replace this one.\n\n1. Missing column in the header (row 1): column sku is missing. What to do: Add this column to the header and fill it in on every row, as in your usual export.\n\nNote from the Intake agent: Your upload is missing the required 'sku' column. Please add this column and resend the file."
      }
     ],
     "anomalies": [],
@@ -374,7 +374,7 @@
     {
      "day": "2026-11-02",
      "sales_channel": "ST02",
-     "sales_channel_name": "Northgate Store",
+     "sales_channel_name": "Riverside Store",
      "quantity_sold": 233,
      "net_sales": 8272.05
     }
@@ -390,14 +390,14 @@
     {
      "day": "2026-11-02",
      "sales_channel": "ST02",
-     "sales_channel_name": "Northgate Store",
+     "sales_channel_name": "Riverside Store",
      "skus_in_stock": 300,
      "on_hand": 15943
     },
     {
      "day": "2026-11-02",
      "sales_channel": "ST03",
-     "sales_channel_name": "Westfield Store",
+     "sales_channel_name": "Old Town Store",
      "skus_in_stock": 300,
      "on_hand": 9787
     }
@@ -611,14 +611,14 @@
     {
      "day": "2026-11-02",
      "sales_channel": "ST02",
-     "sales_channel_name": "Northgate Store",
+     "sales_channel_name": "Riverside Store",
      "quantity_sold": 233,
      "net_sales": 8272.05
     },
     {
      "day": "2026-11-02",
      "sales_channel": "ST03",
-     "sales_channel_name": "Westfield Store",
+     "sales_channel_name": "Old Town Store",
      "quantity_sold": 140,
      "net_sales": 4441.65
     },
@@ -632,14 +632,14 @@
     {
      "day": "2026-11-03",
      "sales_channel": "ST02",
-     "sales_channel_name": "Northgate Store",
+     "sales_channel_name": "Riverside Store",
      "quantity_sold": 261,
      "net_sales": 9203.35
     },
     {
      "day": "2026-11-03",
      "sales_channel": "ST03",
-     "sales_channel_name": "Westfield Store",
+     "sales_channel_name": "Old Town Store",
      "quantity_sold": 155,
      "net_sales": 5585.3
     }
@@ -655,14 +655,14 @@
     {
      "day": "2026-11-02",
      "sales_channel": "ST02",
-     "sales_channel_name": "Northgate Store",
+     "sales_channel_name": "Riverside Store",
      "skus_in_stock": 300,
      "on_hand": 15943
     },
     {
      "day": "2026-11-02",
      "sales_channel": "ST03",
-     "sales_channel_name": "Westfield Store",
+     "sales_channel_name": "Old Town Store",
      "skus_in_stock": 300,
      "on_hand": 9787
     },
@@ -676,14 +676,14 @@
     {
      "day": "2026-11-03",
      "sales_channel": "ST02",
-     "sales_channel_name": "Northgate Store",
+     "sales_channel_name": "Riverside Store",
      "skus_in_stock": 300,
      "on_hand": 15682
     },
     {
      "day": "2026-11-03",
      "sales_channel": "ST03",
-     "sales_channel_name": "Westfield Store",
+     "sales_channel_name": "Old Town Store",
      "skus_in_stock": 300,
      "on_hand": 9632
     }

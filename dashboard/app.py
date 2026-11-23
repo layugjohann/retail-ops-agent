@@ -645,9 +645,33 @@ def _replay_load(step: ReplayStep) -> None:
         "Nothing loaded.",
     )
     st.subheader("Accepted sales by Sales Channel")
-    _table([s.model_dump() for s in step.sales], "No accepted sales.")
+    _table(
+        [
+            {
+                "day": s.day,
+                "Sales Channel": s.sales_channel,
+                "name": s.sales_channel_name,
+                "units sold": s.quantity_sold,
+                "net sales": s.net_sales,
+            }
+            for s in step.sales
+        ],
+        "No accepted sales.",
+    )
     st.subheader("Accepted inventory by Sales Channel")
-    _table([i.model_dump() for i in step.inventory], "No accepted inventory.")
+    _table(
+        [
+            {
+                "day": i.day,
+                "Sales Channel": i.sales_channel,
+                "name": i.sales_channel_name,
+                "SKUs in stock": i.skus_in_stock,
+                "units on hand": i.on_hand,
+            }
+            for i in step.inventory
+        ],
+        "No accepted inventory.",
+    )
 
 
 def _replay_detection(step: ReplayStep) -> None:

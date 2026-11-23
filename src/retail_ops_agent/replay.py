@@ -408,7 +408,8 @@ RECORDING_PLANS: list[RecordingPlan] = [
         record_from=date(2026, 3, 9),
         sales_channels=["ST02"],
         anomalies=[AnomalyPlan(kind=AnomalyKind.STOCKOUT_RISK, sales_channel="ST02", day=date(2026, 3, 12))],
-        auto_approval_limit=100_000.0,
+        # Above the default so a small Reorder clears it whichever model proposes the quantity.
+        auto_approval_limit=500.0,
     ),
     RecordingPlan(
         recording_id="03-stockout-reorder-approval",
