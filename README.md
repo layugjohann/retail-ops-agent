@@ -1,18 +1,92 @@
 # retail-ops-agent
 
+**Three agents that turn a retailer's messy daily CSV Uploads into trusted BI data, then into
+investigated, tiered Actions, with a human approving anything that costs money.**
+
 **Live demo (Replay Mode):** https://cobalt-home-ops.streamlit.app/
 
 A working prototype of a forward-deployed engagement at **Cobalt Home**, a fictional home and
-lifestyle retailer (6 Stores, an Online Shop, about 300 SKUs). All data is simulated.
+lifestyle retailer (6 Stores, an Online Shop, about 300 SKUs). All data and discovery documents are
+simulated and labelled as such. It costs $0 to build, run and host: free-tier models by default,
+your own key for frontier models (ADR 0001).
 
-See `GLOSSARY.md` for terms, `docs/adr/` for decisions and `.scratch/retail-ops-agent/spec.md`
-for the spec.
+Every Ops Day:
 
-## Develop
+1. **Intake.** The Intake agent validates each Upload (four formats, Stores and Online Shop),
+   applies Safe Fixes, Quarantines what can't be fixed without guessing, and writes the Uploader a
+   plain-language message saying what to correct.
+2. **Load.** Accepted data goes into the BI store (DuckDB); the dashboard reflects it.
+3. **Detect.** Plain, reproducible statistics flag Anomalies: stockout risks, Sales Drops, Sales
+   Spikes and Slow Movers.
+4. **Investigate.** The Analyst agent looks into each Anomaly with read-only tools and explains the
+   cause, or concludes Data Problem and sends the Uploads back to Intake.
+5. **Act.** The Ops agent proposes Actions. Fixed rules set each Action's Tier: alerts run on their
+   own and can be undone from the Audit Log; Reorders wait in the Approval Queue unless they are
+   under the Auto-approval Limit.
+
+The dashboard shows sales and inventory, Upload status, Investigations, the Approval Queue, the
+Audit Log with undo, and **Hours Saved**, with every assumption behind it shown next to the number.
+
+## What it shows, against the job posting
+
+The target role is a "Forward Deployed Engineer (AI Enhanced)" at a retail and e-commerce company
+whose stack is unknown. Each responsibility in the posting, and where this project shows it:
+
+| Responsibility in the posting | Where it is in this project |
+| --- | --- |
+| Embed with the teams and discover manual bottlenecks | [Discovery documents](docs/discovery/): an [engagement brief](docs/discovery/engagement-brief.md), [personas](docs/discovery/personas.md), the [current manual processes](docs/discovery/manual-processes.md) step by step, and a [baseline](docs/discovery/baseline.md) of timings, every one marked as an assumption. |
+| Build multi-agent, tool-calling workflows that save measurable hours | Intake, Analyst and Ops agents (Pydantic AI, typed outputs, their own tools and permissions) in a deterministic pipeline behind one Ops Day boundary (`src/retail_ops_agent/ops_day.py`). **Hours Saved** on the dashboard comes from the Audit Log times the baseline. The agents take real Actions: Safe Fixes, Quarantines, alerts and Reorders in the ERP. |
+| Maintain the BI system: CSV uploads, ETL, validation, dashboards | Four Upload formats parsed and normalised (Online Shop Order Lines totalled, cancelled and refunded lines left out); Defect checks for missing, renamed and swapped columns, duplicate days, impossible quantities, unknown SKUs, date mismatches and encoding problems, with a Safe Fix for the four that need no guessing; Supersede for resent Uploads; a DuckDB BI store; a Streamlit [dashboard](dashboard/). |
+| Act as the go-between with ERP and API vendors | The ERP is reached only through an [MCP server](#the-erp-mcp-server) with a contract suite, and the Data Source and Notifier sit behind seams. The [Deployment Playbook](docs/deployment-playbook.md) is the week-one plan for pointing them at a real retailer's NetSuite or Odoo, POS or Shopify, and Slack or Teams. |
+
+Two things the posting implies but doesn't list:
+
+- **Low-code where it fits, logic in tested code.** A scheduled [n8n workflow](#scheduled-ops-days-with-n8n)
+  triggers each Ops Day and forwards notifications. It holds no business logic, which a test checks.
+- **Agents that can be trusted with side effects.** [Golden-Scenario evals](evals/README.md) with
+  exact Ground Truth grade each agent, an LLM judge grades free text against a Rubric, and the hard
+  rule "no Tier 2 Action without Approval" must hold in 100% of Scenarios. Prompt injections planted
+  in Uploads are graded for having no effect.
+
+## Design highlights
+
+- **Tiers are rules, not model confidence** ([ADR 0002](docs/adr/0002-action-tiers-are-rules-not-confidence.md)).
+  The model recommends; a rule table decides whether an Action runs, waits for Approval or is
+  refused. A scripted model that "obeys" an injected instruction still cannot get a Reorder past the Approval Queue
+  (`tests/test_prompt_injection.py`).
+- **No LLM supervisor** ([ADR 0003](docs/adr/0003-deterministic-handoff-no-llm-supervisor.md)).
+  Handoff between agents is a fixed pipeline and Anomalies come from statistics, so routing is
+  testable and the same data always gives the same flags.
+- **The ERP is an MCP server** ([ADR 0006](docs/adr/0006-erp-as-mcp-server.md)). The swap a real
+  engagement needs is exactly one server, and Claude Desktop can talk to it too.
+- **Synthetic data with planted problems** ([ADR 0005](docs/adr/0005-synthetic-data-with-planted-defects.md)).
+  A seeded generator plants Defects, Anomalies, chain-wide Lookalikes and prompt injections, and
+  records Ground Truth, so every eval has an exact answer.
+- **Undo that stays honest** ([ADR 0007](docs/adr/0007-undoing-a-safe-fix-quarantines-the-upload.md),
+  [ADR 0008](docs/adr/0008-undoing-a-quarantine-releases-the-checked-rows.md)). The Audit Log is
+  append-only; an undo is a new entry, and it never loads data that would need a guess.
+- **Corrections replace, they don't double-count** ([ADR 0009](docs/adr/0009-the-latest-upload-for-a-day-replaces-every-earlier-one.md)).
+  A resent Upload Supersedes the earlier one; Anomalies built on it are re-checked, dependent
+  alerts undone, and a Reorder already placed is flagged for a person, never cancelled silently.
+- **Local problems, not chain-wide ones** ([ADR 0010](docs/adr/0010-anomalies-are-judged-against-the-other-sales-channels.md)).
+  A Sales Drop or Spike must stand out from the other Sales Channels, so a seasonal dip is never
+  blamed on one Store.
+- **Agents catch each other's misses** ([ADR 0011](docs/adr/0011-a-data-problem-sends-uploads-back-to-intake-by-rule.md)).
+  A Store reporting cases instead of units passes validation, shows up as a spike, and the Analyst
+  sends it back to Intake as a Data Problem; a rule, not the model, picks which Uploads go back.
+- **$0, with a framework that stays out of the way** ([ADR 0001](docs/adr/0001-zero-cost-free-tier-plus-byok.md),
+  [ADR 0004](docs/adr/0004-pydantic-ai-over-langgraph.md)).
+
+Terms are defined in [`GLOSSARY.md`](GLOSSARY.md); the full spec is
+[`.scratch/retail-ops-agent/spec.md`](.scratch/retail-ops-agent/spec.md).
+
+## Run it locally
+
+Needs Python 3.13+ and [uv](https://docs.astral.sh/uv/). Docker only for n8n.
 
 ```sh
 uv sync
-make check       # ruff lint + format check, pyright, pytest
+make check       # ruff lint + format check, pyright, pytest (no keys, no network)
 make dashboard   # Streamlit dashboard; opens in Replay Mode
 make evals       # Golden Scenarios against real free-tier models; see evals/README.md
 make record      # record Ops Days for Replay Mode
@@ -21,7 +95,49 @@ make trigger     # the local HTTP entry point n8n calls to run an Ops Day
 make n8n         # local n8n in Docker, with the scheduled Ops Day workflow imported
 ```
 
-Model keys are optional and free-tier only; see `.env.example`.
+Model keys are optional and free-tier only: copy `.env.example` to `.env.local` and add a
+[Groq](https://console.groq.com/keys) or [Gemini](https://aistudio.google.com/apikey) key. With no
+key, an offline scripted model stands in, so everything but the evals runs without a network.
+
+## Evals
+
+Golden Scenarios drive the same Ops Day boundary the dashboard uses, with real models, and grade
+the outcome against the generator's Ground Truth: Defect precision and recall, Safe Fix
+correctness, Upload statuses and BI data for Intake; the stated cause and Data Problems for the
+Analyst; the Action, its Tier and the Approval Queue rules for the Ops agent; Lookalikes,
+Supersede and prompt injections; and the hard rule. An LLM judge grades Uploader messages and
+Investigations against written Rubrics.
+
+```sh
+make evals                                              # every Scenario, judge on
+make evals ARGS="--tag prompt-injection --no-judge"     # one tag, deterministic graders only
+make evals ARGS="--model groq:openai/gpt-oss-120b"      # choose the model (and --judge-model)
+```
+
+Runs are paced to stay inside free-tier rate limits. Each run writes a machine-readable Scorecard
+to `evals/results/` and prints a table; it exits non-zero if any Scenario fails or the hard rule
+breaks. Options, the Scenario format and every grader are in [`evals/README.md`](evals/README.md).
+
+### Latest Scorecard
+
+<!-- TODO(owner): run `make evals` with a free-tier key, then paste the printed table here with the
+date and the models used (and a frontier-model run beside it, if you have a key). No Scorecard has
+been published yet; the figures below are deliberately left blank rather than invented. -->
+
+| | Free tier (`groq:openai/gpt-oss-120b`) |
+| --- | --- |
+| Run date | _not yet run_ |
+| Golden Scenarios passed | _–_ / 33 |
+| Defect precision / recall | _–_ |
+| Hard rule (no Tier 2 Action without Approval) | _–_ |
+| LLM judge criteria passed | _–_ |
+
+## Adapting it to a real retailer
+
+The [Deployment Playbook](docs/deployment-playbook.md) is the plan for week one at a real Client:
+replacing the Data Source, the ERP MCP server and the Notifier; calibrating the Anomaly thresholds
+and the Auto-approval Limit with the people who act on them; and rebuilding the baseline behind
+Hours Saved from real timings.
 
 ## Replay Mode
 
