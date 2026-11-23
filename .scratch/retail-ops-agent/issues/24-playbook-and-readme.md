@@ -4,7 +4,8 @@
 
 **Blocked by:** 17, 21, 23
 
-**Status:** in-progress
+**Status:** awaiting-merge
+**Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/22
 
 - [x] Playbook: replacing the Data Source, ERP MCP server and Notifier; calibrating Anomaly thresholds and the Auto-approval Limit; rebuilding the baseline from real timings
 - [x] README: tagline, demo link, each posting responsibility mapped to a feature, design highlights linking the ADRs, how to run locally, how to run evals, and the latest scorecard
@@ -28,3 +29,5 @@ Usage: Implementer 42 input, 18,151 output, 77,578 cache creation, 1,373,933 cac
 **Gate passed**: every command exited 0 (log: `.sandcastle/logs/gate-24-2026-11-23T16-03-30-220Z.log`).
 
 Usage: Body writer 2 input, 953 output, 31,267 cache creation, 11,842 cache read.
+
+**Pull Request opened**: https://github.com/layugjohann/retail-ops-agent/pull/22
