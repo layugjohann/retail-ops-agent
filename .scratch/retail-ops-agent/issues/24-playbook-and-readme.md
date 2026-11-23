@@ -8,7 +8,7 @@
 **Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/22
 
 - [x] Playbook: replacing the Data Source, ERP MCP server and Notifier; calibrating Anomaly thresholds and the Auto-approval Limit; rebuilding the baseline from real timings
-- [x] README: tagline, demo link, each posting responsibility mapped to a feature, design highlights linking the ADRs, how to run locally, how to run evals, and the latest scorecard
+- [ ] README: tagline, demo link, each posting responsibility mapped to a feature, design highlights linking the ADRs, how to run locally, how to run evals, and the latest scorecard
 - [ ] **The user has reviewed and rewritten the README in their own voice** before this ticket is done
 
 ## Comments

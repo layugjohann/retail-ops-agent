@@ -68,8 +68,8 @@ arrive one of three ways:
 Order matters for Supersede (ADR 0009): `uploads_for` must return Uploads oldest first, because
 the latest one for a Sales Channel, day and kind replaces every earlier one.
 
-**Check:** run a week of the Client's real Uploads through `submit` and `run`. The BI analyst
-should agree with every status. A clean Upload that ends Quarantined is a bug, not a calibration
+**Check:** run a week of the Client's real Uploads through `OpsDay.submit_upload` and
+`OpsDay.run_ops_day`. The BI analyst should agree with every status. A clean Upload that ends Quarantined is a bug, not a calibration
 issue: fix the parser or the check before going on.
 
 ## 2. Replace the ERP MCP server
@@ -214,8 +214,11 @@ figure that is smaller and can be defended is worth more than a large one that c
 - [ ] Golden Scenarios built from the Client's real (anonymised) Uploads, with their real Defects,
       pass with the model they will run on. `make evals` reports the hard rule as held.
 - [ ] The prompt-injection Scenarios pass. Every free-text column in the Client's formats (product
-      descriptions, order notes) is listed in `upload_formats.FREE_TEXT_COLUMNS`, so it only ever
-      reaches a model as quoted data and is never loaded into the BI data.
+      descriptions, order notes) is covered by `upload_formats.FREE_TEXT_COLUMNS`, so it only ever
+      reaches a model as quoted data and is never loaded into the BI data. That table holds one
+      column per format today: a Client format with several free-text columns needs the table
+      (and the code that reads it in `upload_formats.py` and `intake.py`) widened to a list of
+      columns first.
 - [ ] Model choice agreed: free-tier models are fine for a pilot; a Client running this every day
       will want a paid or self-hosted model under its own data agreement. Compare them with
       `make evals ARGS="--model ..."`.
