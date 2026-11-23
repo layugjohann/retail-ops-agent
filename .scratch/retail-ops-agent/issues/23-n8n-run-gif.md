@@ -5,6 +5,7 @@
 **Blocked by:** 22
 
 **Status:** ready-for-human
+**Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/21
 
 - [x] Workflow imported and running locally in Docker
 - [ ] A scheduled Ops Day runs and forwards notifications
