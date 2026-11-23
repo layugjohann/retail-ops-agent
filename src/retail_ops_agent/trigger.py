@@ -16,7 +16,9 @@ Endpoints:
 
 The sandbox (BI store, fake ERP, clock and Uploads) lives in this process's memory, so each run
 continues where the last one stopped. Models come from the environment as everywhere else: a
-free-tier key if set, else the offline scripted model.
+free-tier key if set, else the offline scripted model. A real model's requests are paced (--rpm)
+and retried when rate-limited, as for Recordings, so one Ops Day stays inside the free tier's
+per-minute limit; it takes a few minutes, well inside the workflow's 15-minute timeout.
 """
 
 from __future__ import annotations
@@ -37,7 +39,7 @@ from pydantic import BaseModel, ConfigDict
 from pydantic_ai.exceptions import AgentRunError
 
 from retail_ops_agent.live import new_live_sandbox
-from retail_ops_agent.models import models_from_environment
+from retail_ops_agent.models import DEFAULT_REQUESTS_PER_MINUTE, paced_models_from_environment
 from retail_ops_agent.notifier import LogNotifier, Notification, Notifier
 from retail_ops_agent.ops_day import Models
 from retail_ops_agent.sandbox import Sandbox
@@ -256,8 +258,14 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument(
         "--seeded-days", type=int, default=DEFAULT_SEEDED_DAYS, help="days to run before the first trigger"
     )
+    parser.add_argument(
+        "--rpm",
+        type=float,
+        default=DEFAULT_REQUESTS_PER_MINUTE,
+        help="model requests per minute, below the free tier's limit (0: no pacing)",
+    )
     args = parser.parse_args(argv)
-    models, label = models_from_environment(os.environ)
+    models, label = paced_models_from_environment(os.environ, args.rpm)
     print("Seeding the Cobalt Home sandbox...", file=sys.stderr, flush=True)
     trigger = OpsDayTrigger(
         lambda notifier: new_live_sandbox(notifier=notifier, days=args.days, seeded_days=args.seeded_days),

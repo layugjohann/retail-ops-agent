@@ -407,6 +407,28 @@ def test_a_throttled_model_paces_every_request_and_waits_out_rate_limits() -> No
     assert time.slept == [7.0, 6.0]
 
 
+def test_a_throttled_model_waits_out_a_providers_demand_spike() -> None:
+    time = _FakeTime()
+    calls: list[float] = []
+
+    def overloaded_once(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        calls.append(time.now)
+        if len(calls) == 1:
+            raise ModelHTTPError(503, "free-tier", {"error": {"status": "UNAVAILABLE"}})
+        return ModelResponse(parts=[TextPart("ok")])
+
+    model = ThrottledModel(
+        FunctionModel(overloaded_once),
+        Throttle(0, monotonic=time.monotonic, sleep=time.sleep),
+        backoff_seconds=3.0,
+    )
+    with models.override_allow_model_requests(True):
+        output = Agent(model).run_sync("hello").output
+
+    assert output == "ok"
+    assert calls == [0.0, 3.0]
+
+
 def test_a_throttled_model_gives_up_after_its_retries_and_never_retries_other_failures() -> None:
     time = _FakeTime()
     statuses = iter([429, 429, 500])

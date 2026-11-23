@@ -59,9 +59,17 @@ Every evening (22:00) ─┐
 Run now (manual) ──────┘    POST /ops-day/run   split "notifications"   POST {"text": ...}
 ```
 
+![n8n runs the Nov 6 Ops Day on gpt-oss-120b: the trigger Quarantines ST03's sales Upload for a missing date column, and n8n forwards the message to its Uploader](docs/media/n8n-ops-day.gif)
+
+*One Ops Day triggered from n8n, at 10× speed (about 3 minutes in real time, as model calls are
+paced for the free tier). Started with `make trigger ARGS="--seeded-days 5"`, so the first run
+lands on the day with a Defect that has no Safe Fix.*
+
 1. Start the trigger on the host. It seeds a Cobalt Home sandbox (Live Mode's, with its planted
    Defects and stockout risk) in memory, then runs the next day each time it is called. It uses a
-   free-tier key from `.env.local` if there is one, else the offline scripted model.
+   free-tier key from `.env.local` if there is one, else the offline scripted model. A real model's
+   requests are paced to 10 a minute (`--rpm`), below Gemini's free-tier limit of 15, and retried
+   when rate-limited, so one Ops Day takes a few minutes; the workflow waits up to 15.
 
    ```sh
    make trigger                       # http://127.0.0.1:8765
