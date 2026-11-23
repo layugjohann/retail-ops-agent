@@ -2,9 +2,9 @@
  "recording_id": "02-stockout-auto-approved-reorder",
  "title": "Stockout risk: a Reorder under the Auto-approval Limit",
  "description": "A demand surge drains a SKU at ST02 until its days of cover fall below its Lead Time. The Analyst investigates, the Ops agent proposes a Reorder, and because its cost is under the Auto-approval Limit the Action policy approves it by rule and places it in the ERP.",
- "model": "offline scripted model (no key set)",
+ "model": "groq:openai/gpt-oss-120b",
  "seed": 42,
- "auto_approval_limit": 100000.0,
+ "auto_approval_limit": 500.0,
  "ops_days": [
   {
    "outcome": {
@@ -59,7 +59,7 @@
     {
      "day": "2026-03-09",
      "sales_channel": "ST02",
-     "sales_channel_name": "Old Town Store",
+     "sales_channel_name": "Riverside Store",
      "quantity_sold": 254,
      "net_sales": 8719.91
     }
@@ -68,7 +68,7 @@
     {
      "day": "2026-03-09",
      "sales_channel": "ST02",
-     "sales_channel_name": "Old Town Store",
+     "sales_channel_name": "Riverside Store",
      "skus_in_stock": 300,
      "on_hand": 17369
     }
@@ -120,9 +120,9 @@
       "recorded_at": "2026-03-10T21:00:00",
       "action": "reorder",
       "tier": 2,
-      "triggered_by": "Stockout risk flagged: Reorder proposed (INV-stockout_risk:ST02:CH-0015:2026-03-10); its cost 173.76 is under the Auto-approval Limit of 100000.00",
+      "triggered_by": "Reorder CH-0015 (Matte Tumbler, Sand) for ST02 – 30 units (INV-stockout_risk:ST02:CH-0015:2026-03-10); its cost 108.60 is under the Auto-approval Limit of 500.00",
       "taken_by": "Action policy (Auto-approval Limit)",
-      "summary": "Placed Reorder RO-00001: 48 units of CH-0015 for ST02 from Nordlinen Textiles, cost 173.76",
+      "summary": "Placed Reorder RO-00001: 30 units of CH-0015 for ST02 from Brightwell Ceramics, cost 108.60",
       "upload_id": null,
       "defect": null,
       "undo": {
@@ -130,7 +130,7 @@
        "upload_id": null,
        "entry_id": null,
        "reorder_id": "RO-00001",
-       "description": "Cancel Reorder RO-00001 in the ERP and tell Nordlinen Textiles. A cancelled Reorder is never placed again by an undo."
+       "description": "Cancel Reorder RO-00001 in the ERP and tell Brightwell Ceramics. A cancelled Reorder is never placed again by an undo."
       },
       "investigation_id": "INV-stockout_risk:ST02:CH-0015:2026-03-10",
       "undoes": null,
@@ -169,13 +169,16 @@
       },
       "investigated_at": "2026-03-10T21:00:00",
       "investigated_by": "Analyst agent",
-      "cause": "Not investigated: no model key is set, so an offline scripted model stood in.",
+      "cause": "A sudden sales spike on 2026-03-10 depleted inventory faster than usual, leaving insufficient stock to cover the 21‑day lead time.",
       "evidence": [
-       "See the statistics that flagged the Anomaly."
+       "24 units sold on 2026-03-10, whereas the average daily sales over the past 9 days is only 3.67 units.",
+       "On‑hand inventory fell to 48 units on 2026-03-10.",
+       "No open reorders exist for this SKU at ST02.",
+       "With a 21‑day lead time, the required inventory is 21 × 3.67 ≈ 77 units, creating a shortfall of about 29 units."
       ],
       "recommended_action": {
        "kind": "reorder",
-       "description": "Reorder the SKU; the inventory planner decides in the Approval Queue."
+       "description": "Place a reorder of roughly 30 units (5 cases of 6) to bring stock up to the 21‑day cover level."
       },
       "data_problem": null
      }
@@ -188,13 +191,13 @@
       "sales_channel": "ST02",
       "sku": "CH-0015",
       "sku_name": "Matte Tumbler, Sand",
-      "supplier_code": "SUP03",
-      "supplier_name": "Nordlinen Textiles",
-      "quantity": 48,
+      "supplier_code": "SUP01",
+      "supplier_name": "Brightwell Ceramics",
+      "quantity": 30,
       "unit_cost": 3.62,
-      "cost": 173.76,
-      "subject": "Stockout risk flagged: Reorder proposed",
-      "reason": "Days of cover fell below the Lead Time. Not investigated: no model key is set, so an offline scripted model stood in.",
+      "cost": 108.6,
+      "subject": "Reorder CH-0015 (Matte Tumbler, Sand) for ST02 – 30 units",
+      "reason": "Current on‑hand is 48 units; with a 21‑day lead time and avg daily sales of 3.67 units we need ~77 units. That leaves a shortfall of ~29 units. Ordering 5 case packs (30 units) restores 21‑day cover with a safety margin.",
       "status": "auto_approved",
       "decided_at": "2026-03-10T21:00:00",
       "decided_by": "Action policy (Auto-approval Limit)",
@@ -215,7 +218,7 @@
     {
      "day": "2026-03-10",
      "sales_channel": "ST02",
-     "sales_channel_name": "Old Town Store",
+     "sales_channel_name": "Riverside Store",
      "quantity_sold": 275,
      "net_sales": 9477.67
     }
@@ -224,7 +227,7 @@
     {
      "day": "2026-03-10",
      "sales_channel": "ST02",
-     "sales_channel_name": "Old Town Store",
+     "sales_channel_name": "Riverside Store",
      "skus_in_stock": 300,
      "on_hand": 17094
     }

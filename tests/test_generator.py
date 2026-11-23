@@ -39,7 +39,7 @@ def test_catalog_has_the_clients_shape() -> None:
     assert kinds.count(SalesChannelKind.STORE) == 6
     assert kinds.count(SalesChannelKind.ONLINE_SHOP) == 1
     assert 280 <= len(catalog.skus) <= 320
-    assert 4 <= len(catalog.suppliers) <= 6
+    assert len(catalog.suppliers) == 7
     assert len({s.code for s in catalog.skus}) == len(catalog.skus)
 
 
