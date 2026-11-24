@@ -154,17 +154,8 @@ breaks. Options, the Scenario format and every grader are in [`evals/README.md`]
 
 ### Latest Scorecard
 
-<!-- TODO(owner): run `make evals` with a free-tier key, then paste the printed table here with the
-date and the models used (and a frontier-model run beside it, if you have a key). No Scorecard has
-been published yet; the figures below are deliberately left blank rather than invented. -->
-
-| | Free tier (`groq:openai/gpt-oss-120b`) |
-| --- | --- |
-| Run date | _not yet run_ |
-| Golden Scenarios passed | _–_ / 33 |
-| Defect precision / recall | _–_ |
-| Hard rule (no Tier 2 Action without Approval) | _–_ |
-| LLM judge criteria passed | _–_ |
+A full run on the free tier (`groq:openai/gpt-oss-120b`) is in progress. Its results will be
+published here when it finishes, rather than estimated beforehand.
 
 ## Adapting it to a real retailer
 
