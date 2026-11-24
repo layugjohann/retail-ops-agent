@@ -4,12 +4,12 @@
 
 **Blocked by:** 17, 21, 23
 
-**Status:** awaiting-merge
+**Status:** done
 **Pull Request:** https://github.com/layugjohann/retail-ops-agent/pull/22
 
 - [x] Playbook: replacing the Data Source, ERP MCP server and Notifier; calibrating Anomaly thresholds and the Auto-approval Limit; rebuilding the baseline from real timings
-- [ ] README: tagline, demo link, each posting responsibility mapped to a feature, design highlights linking the ADRs, how to run locally, how to run evals, and the latest scorecard
-- [ ] **The user has reviewed and rewritten the README in their own voice** before this ticket is done
+- [x] README: tagline, demo link, each posting responsibility mapped to a feature, design highlights linking the ADRs, how to run locally, how to run evals, and the latest scorecard
+- [x] **The user has reviewed and rewritten the README in their own voice** before this ticket is done
 
 ## Comments
 
@@ -31,3 +31,5 @@ Usage: Implementer 42 input, 18,151 output, 77,578 cache creation, 1,373,933 cac
 Usage: Body writer 2 input, 953 output, 31,267 cache creation, 11,842 cache read.
 
 **Pull Request opened**: https://github.com/layugjohann/retail-ops-agent/pull/22
+
+- Closing: PR #22 is merged, and the user rewrote the README in their own voice. The Scorecard is not published. A full 33-Scenario run doesn't fit in the free tiers' daily limits. On Groq (`openai/gpt-oss-120b`), the key's 150,000 tokens a day ran out a few Scenarios in, and the run then waited out Groq's "try again in 2h24m". A Gemini run (`gemini-3.5-flash-lite`) got through 15 Scenarios, then stalled for over an hour on the 16th for an unknown reason and was stopped. The README says no Scorecard is published and why. The user decided to close the ticket without it.

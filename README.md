@@ -152,10 +152,11 @@ Runs are paced to stay inside free-tier rate limits. Each run writes a machine-r
 to `evals/results/` and prints a table; it exits non-zero if any Scenario fails or the hard rule
 breaks. Options, the Scenario format and every grader are in [`evals/README.md`](evals/README.md).
 
-### Latest Scorecard
+### Scorecard
 
-A full run on the free tier (`groq:openai/gpt-oss-120b`) is in progress. Its results will be
-published here when it finishes, rather than estimated beforehand.
+No Scorecard is published yet. A full run of all 33 Scenarios doesn't fit in the free tiers' daily
+limits: Groq's allowance of 150,000 tokens a day ran out a few Scenarios in. Run `make evals` with
+your own key to get one; the figures are left out here rather than estimated.
 
 ## Adapting it to a real retailer
 
