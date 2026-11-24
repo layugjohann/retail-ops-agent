@@ -446,3 +446,43 @@ def test_a_throttled_model_gives_up_after_its_retries_and_never_retries_other_fa
     with pytest.raises(ModelHTTPError) as raised:
         Agent(model).run_sync("hello")
     assert raised.value.status_code == 500
+
+
+def test_a_throttled_model_retries_a_request_the_provider_never_answers() -> None:
+    time = _FakeTime()
+    calls: list[float] = []
+
+    async def silent_once(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        calls.append(time.now)
+        if len(calls) == 1:
+            await asyncio.Event().wait()  # The connection stays open and no answer ever comes.
+        return ModelResponse(parts=[TextPart("ok")])
+
+    model = ThrottledModel(
+        FunctionModel(silent_once),
+        Throttle(0, monotonic=time.monotonic, sleep=time.sleep),
+        backoff_seconds=3.0,
+        request_timeout_seconds=0.05,
+    )
+    with models.override_allow_model_requests(True):
+        output = Agent(model).run_sync("hello").output
+
+    assert output == "ok"
+    assert calls == [0.0, 3.0]
+
+
+def test_a_throttled_model_gives_up_on_a_provider_that_never_answers() -> None:
+    time = _FakeTime()
+
+    async def silent(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        await asyncio.Event().wait()
+        raise AssertionError("unreachable")
+
+    model = ThrottledModel(
+        FunctionModel(silent),
+        Throttle(0, monotonic=time.monotonic, sleep=time.sleep),
+        max_retries=1,
+        request_timeout_seconds=0.05,
+    )
+    with pytest.raises(TimeoutError):
+        Agent(model).run_sync("hello")

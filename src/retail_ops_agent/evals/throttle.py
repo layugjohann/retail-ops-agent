@@ -2,7 +2,8 @@
 
 Free tiers cap requests (and tokens) per minute. A Throttle spaces requests evenly, and a model
 that is refused for a rate limit anyway, or told the provider is briefly overloaded (503), waits as
-long as the provider asks, or backs off, and tries again.
+long as the provider asks, or backs off, and tries again. A request the provider never answers
+times out and is retried the same way, so one dropped connection cannot stall a whole run.
 """
 
 from __future__ import annotations
@@ -24,6 +25,8 @@ TOO_MANY_REQUESTS = 429
 # which pass in seconds to minutes.
 SERVICE_UNAVAILABLE = 503
 RETRIED_STATUSES = {TOO_MANY_REQUESTS, SERVICE_UNAVAILABLE}
+# Long enough for a slow free-tier answer; a request still unanswered after this has been dropped.
+REQUEST_TIMEOUT_SECONDS = 120.0
 
 
 class Throttle:
@@ -62,8 +65,8 @@ def _worth_retrying(error: ModelAPIError) -> bool:
 
 
 class ThrottledModel(WrapperModel):
-    """A model whose requests go through a Throttle and are retried when rate-limited or the
-    provider is briefly overloaded."""
+    """A model whose requests go through a Throttle and are retried when rate-limited, the
+    provider is briefly overloaded, or the provider never answers."""
 
     def __init__(
         self,
@@ -72,11 +75,13 @@ class ThrottledModel(WrapperModel):
         *,
         max_retries: int = 5,
         backoff_seconds: float = 10.0,
+        request_timeout_seconds: float = REQUEST_TIMEOUT_SECONDS,
     ) -> None:
         super().__init__(wrapped)
         self.throttle = throttle
         self.max_retries = max_retries
         self.backoff_seconds = backoff_seconds
+        self.request_timeout_seconds = request_timeout_seconds
 
     async def request(
         self,
@@ -88,9 +93,16 @@ class ThrottledModel(WrapperModel):
         while True:
             await self.throttle.wait()
             try:
-                return await self.wrapped.request(messages, model_settings, model_request_parameters)
+                return await asyncio.wait_for(
+                    self.wrapped.request(messages, model_settings, model_request_parameters),
+                    timeout=self.request_timeout_seconds,
+                )
+            except TimeoutError:
+                if retries >= self.max_retries:
+                    raise
+                await self.throttle.sleep(self.backoff_seconds * 2**retries)
             except ModelAPIError as error:
                 if not _worth_retrying(error) or retries >= self.max_retries:
                     raise
                 await self.throttle.sleep(error.retry_after or self.backoff_seconds * 2**retries)
-                retries += 1
+            retries += 1
