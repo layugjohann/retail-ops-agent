@@ -101,12 +101,18 @@ class _AnomalyBase(BaseModel):
 
 
 class StockoutRisk(_AnomalyBase):
-    """Days of cover of a SKU at a Sales Channel below its Lead Time."""
+    """Days of cover of a SKU at a Sales Channel below its Lead Time.
+
+    average_daily_units covers the sales days of the window up to and including the day, and gives
+    the days of cover: a spike on the day is real demand. usual_daily_units leaves the day out, to
+    compare the day's sales with.
+    """
 
     kind: Literal[AnomalyKind.STOCKOUT_RISK] = AnomalyKind.STOCKOUT_RISK
     sku: str
     on_hand: int
     average_daily_units: float
+    usual_daily_units: float
     sales_days: int
     days_of_cover: float
     lead_time_days: int
@@ -115,7 +121,8 @@ class StockoutRisk(_AnomalyBase):
     def summary(self) -> str:
         return (
             f"Stockout risk for {self.sku} at {self.sales_channel} on {self.day.isoformat()}: "
-            f"{self.on_hand} on hand at {self.average_daily_units:.2f} units a day is "
+            f"{self.on_hand} on hand at {self.average_daily_units:.2f} units a day "
+            f"(usually {self.usual_daily_units:.2f} before the day) is "
             f"{self.days_of_cover:.1f} days of cover, below the {self.lead_time_days}-day Lead Time"
         )
 
@@ -296,6 +303,9 @@ def _at_risk(bi: SalesAndStock, day: date, skus: Mapping[str, Sku]) -> dict[_Key
     first = day - timedelta(days=SALES_WINDOW_DAYS - 1)
     sold = bi.units_sold_between(first, day)
     sales_days = bi.sales_days_between(first, day)
+    before = day - timedelta(days=1)
+    sold_before = bi.units_sold_between(first, before)
+    sales_days_before = bi.sales_days_between(first, before)
     at_risk: dict[_Key, StockoutRisk] = {}
     for (channel, code), on_hand in bi.stock_on(day).items():
         sku = skus.get(code)
@@ -314,11 +324,18 @@ def _at_risk(bi: SalesAndStock, day: date, skus: Mapping[str, Sku]) -> dict[_Key
                 sku=code,
                 on_hand=on_hand,
                 average_daily_units=round(average, 2),
+                usual_daily_units=_usual(
+                    sold_before.get((channel, code), 0), sales_days_before.get(channel, 0)
+                ),
                 sales_days=days,
                 days_of_cover=round(cover, 1),
                 lead_time_days=sku.lead_time_days,
             )
     return at_risk
+
+
+def _usual(units: int, sales_days: int) -> float:
+    return round(units / sales_days, 2) if sales_days else 0.0
 
 
 class _Rates:

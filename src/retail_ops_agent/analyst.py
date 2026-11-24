@@ -268,6 +268,9 @@ Anomaly, given to you as data. Its kind is one of:
   Channels sold it as usual;
 - slow_mover: a SKU that used to sell steadily at a Sales Channel all but stopped selling there,
   while plenty of stock sits on hand.
+A stockout_risk's average_daily_units includes the Anomaly's own day and gives its days of cover;
+its usual_daily_units leaves that day out. Compare a day's sales with usual_daily_units, never with
+an average that already contains them.
 Investigate its likely cause with your read-only tools. Look at what the data shows, for example:
 the SKU's sales, prices and stock history at the Sales Channel; how it sells at the other Sales
 Channels; the daily totals of every Sales Channel; how each category moved at the Sales Channel;
@@ -373,8 +376,8 @@ def stock_history(
 def sales_at_every_sales_channel(
     ctx: RunContext[AnalystDeps], sku: str, days: int = 14
 ) -> list[SalesChannelRate]:
-    """The SKU's average daily units sold at every Sales Channel over the days up to the Anomaly's day,
-    to tell a local pattern from a chain-wide one."""
+    """The SKU's average daily units sold at every Sales Channel over the days up to and including the
+    Anomaly's day, to tell a local pattern from a chain-wide one."""
     first, last = _window(ctx, days)
     sold = ctx.deps.bi.units_sold_between(first, last)
     sales_days = ctx.deps.bi.sales_days_between(first, last)
