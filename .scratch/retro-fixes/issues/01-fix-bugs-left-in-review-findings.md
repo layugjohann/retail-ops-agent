@@ -1,6 +1,7 @@
 # 01: Fix the bugs left in Review Findings
 
-Status: in-progress
+Status: awaiting-merge
+Pull Request: https://github.com/layugjohann/retail-ops-agent/pull/26
 Blocked by: None
 
 **What to build:** Fix the bugs that Review Sessions logged as Non-critical Findings and that are still on `main`.
@@ -49,3 +50,5 @@ Usage: Implementer unknown; Review Session unknown.
 **Gate passed**: every command exited 0 (log: `.sandcastle/logs/gate-01-2026-11-25T14-16-56-129Z.log`).
 
 Usage: Body writer 2 input, 1,685 output, 20,639 cache creation, 11,837 cache read.
+
+**Pull Request opened**: https://github.com/layugjohann/retail-ops-agent/pull/26
