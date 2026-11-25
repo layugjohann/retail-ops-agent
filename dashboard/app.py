@@ -394,6 +394,7 @@ def _live_mode() -> None:
                         "decided at": r.decided_at,
                         "ERP Reorder": r.reorder_id or "",
                         "replaced by": r.replaced_by or "",
+                        "cancelled by": r.cancelled_by or "",
                     }
                     for r in decided
                 ]

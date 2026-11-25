@@ -566,6 +566,17 @@ class OpsDay:
         """Undo an entry already checked to be undoable, recording the undo as a new entry."""
         if target.action is AuditAction.REORDER:
             self._erp.cancel_reorder(_required(target.undo.reorder_id))
+            for item in self._queue.all():
+                if item.audit_entry_id == target.entry_id:
+                    self._queue.save(
+                        item.model_copy(
+                            update={
+                                "status": ApprovalStatus.CANCELLED,
+                                "cancelled_by": taken_by,
+                                "cancelled_at": self._clock.now(),
+                            }
+                        )
+                    )
         entry = self._audit.append(
             recorded_at=self._clock.now(),
             action=AuditAction.UNDO,
@@ -942,7 +953,8 @@ class OpsDay:
     def reorders(self) -> list[QueuedReorder]:
         """Every Reorder proposed, newest first, with its Approval status: pending, approved by a
         person, approved under the Auto-approval Limit, rejected, replaced by a newer
-        Investigation's Reorder, Expired, or withdrawn after a Supersede."""
+        Investigation's Reorder, Expired, withdrawn after a Supersede, or cancelled by an undo after it
+        was placed."""
         self._expire()
         return self._queue.all()
 

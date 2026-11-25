@@ -361,3 +361,21 @@ def test_undoing_a_placed_reorder_cancels_it_and_cannot_place_it_again(
     with pytest.raises(ValueError, match="needs Approval"):
         run.ops_day.undo(undo.entry_id, taken_by=PLANNER)
     assert [r.status for r in run.erp.list_reorders()] == [ReorderStatus.CANCELLED]
+
+
+def test_undoing_a_placed_reorder_marks_its_approval_queue_item_cancelled(
+    catalog: Catalog, tmp_path: Path, generated: GeneratedUploads
+) -> None:
+    run = Run(catalog, tmp_path, auto_approval_limit=0).run(generated)
+    [queued] = run.ops_day.approval_queue()
+    approved = run.ops_day.approve(queued.action_id, approved_by=PLANNER)
+    assert approved.audit_entry_id is not None
+
+    run.ops_day.undo(approved.audit_entry_id, taken_by=PLANNER)
+
+    [item] = run.ops_day.reorders()
+    assert item.status is ApprovalStatus.CANCELLED
+    assert (item.cancelled_by, item.cancelled_at) == (PLANNER, run.clock.now())
+    # The Approval stays on record, and so does the Reorder it placed in the ERP.
+    assert (item.decided_by, item.reorder_id) == (PLANNER, approved.reorder_id)
+    assert [r.status for r in run.ops_day.decided_reorders()] == [ApprovalStatus.CANCELLED]

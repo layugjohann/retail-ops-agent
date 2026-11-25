@@ -29,6 +29,8 @@ class ApprovalStatus(StrEnum):
     # The Anomaly it answered no longer holds, because an Upload it was built on was Superseded; it
     # will never run.
     WITHDRAWN = "withdrawn"
+    # It was placed, then cancelled in the ERP by undoing its Audit Log entry; it will not run again.
+    CANCELLED = "cancelled"
 
 
 class QueuedReorder(BaseModel):
@@ -62,6 +64,9 @@ class QueuedReorder(BaseModel):
     replaced_by: str | None = None
     # Why it was withdrawn from the Approval Queue, once it was.
     withdrawn_because: str | None = None
+    # Who cancelled the placed Reorder by undoing its Audit Log entry, and when.
+    cancelled_by: str | None = None
+    cancelled_at: datetime | None = None
 
     @computed_field
     @property
