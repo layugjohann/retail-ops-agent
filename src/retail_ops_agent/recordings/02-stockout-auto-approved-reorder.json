@@ -120,9 +120,9 @@
       "recorded_at": "2026-03-10T21:00:00",
       "action": "reorder",
       "tier": 2,
-      "triggered_by": "Reorder CH-0015 (Matte Tumbler, Sand) for ST02 – 30 units (INV-stockout_risk:ST02:CH-0015:2026-03-10); its cost 108.60 is under the Auto-approval Limit of 500.00",
+      "triggered_by": "Reorder request: CH-0015 (Matte Tumbler, Sand) for ST02 – 36 units (INV-stockout_risk:ST02:CH-0015:2026-03-10); its cost 130.32 is under the Auto-approval Limit of 500.00",
       "taken_by": "Action policy (Auto-approval Limit)",
-      "summary": "Placed Reorder RO-00001: 30 units of CH-0015 for ST02 from Brightwell Ceramics, cost 108.60",
+      "summary": "Placed Reorder RO-00001: 36 units of CH-0015 for ST02 from Brightwell Ceramics, cost 130.32",
       "upload_id": null,
       "defect": null,
       "undo": {
@@ -147,6 +147,7 @@
       "sku": "CH-0015",
       "on_hand": 48,
       "average_daily_units": 3.67,
+      "usual_daily_units": 1.12,
       "sales_days": 9,
       "days_of_cover": 13.1,
       "lead_time_days": 21
@@ -163,22 +164,24 @@
        "sku": "CH-0015",
        "on_hand": 48,
        "average_daily_units": 3.67,
+       "usual_daily_units": 1.12,
        "sales_days": 9,
        "days_of_cover": 13.1,
        "lead_time_days": 21
       },
       "investigated_at": "2026-03-10T21:00:00",
       "investigated_by": "Analyst agent",
-      "cause": "A sudden sales spike on 2026-03-10 depleted inventory faster than usual, leaving insufficient stock to cover the 21‑day lead time.",
+      "cause": "A sudden demand spike on 2026-03-10 sold 24 units, dropping on‑hand stock to 48 and leaving only about 13 days of cover, which is below the 21‑day supplier lead time.",
       "evidence": [
-       "24 units sold on 2026-03-10, whereas the average daily sales over the past 9 days is only 3.67 units.",
-       "On‑hand inventory fell to 48 units on 2026-03-10.",
-       "No open reorders exist for this SKU at ST02.",
-       "With a 21‑day lead time, the required inventory is 21 × 3.67 ≈ 77 units, creating a shortfall of about 29 units."
+       "Sales on 2026-03-10: 24 units (net sales $209.28, price per unit $8.72).",
+       "Usual daily sales (excluding the spike): 1.12 units per day.",
+       "On‑hand inventory on 2026-03-10: 48 units.",
+       "Days of cover calculated with the spike: 48 ÷ 3.67 ≈ 13.1 days, less than the 21‑day lead time.",
+       "No open reorders exist for this SKU at this channel."
       ],
       "recommended_action": {
        "kind": "reorder",
-       "description": "Place a reorder of roughly 30 units (5 cases of 6) to bring stock up to the 21‑day cover level."
+       "description": "Create a reorder for CH‑0015 at ST02 for roughly 36 units (six cases) to raise stock to at least 84 units, giving ~21‑day cover at the recent average demand and a safety buffer."
       },
       "data_problem": null
      }
@@ -193,11 +196,11 @@
       "sku_name": "Matte Tumbler, Sand",
       "supplier_code": "SUP01",
       "supplier_name": "Brightwell Ceramics",
-      "quantity": 30,
+      "quantity": 36,
       "unit_cost": 3.62,
-      "cost": 108.6,
-      "subject": "Reorder CH-0015 (Matte Tumbler, Sand) for ST02 – 30 units",
-      "reason": "Current on‑hand is 48 units; with a 21‑day lead time and avg daily sales of 3.67 units we need ~77 units. That leaves a shortfall of ~29 units. Ordering 5 case packs (30 units) restores 21‑day cover with a safety margin.",
+      "cost": 130.32,
+      "subject": "Reorder request: CH-0015 (Matte Tumbler, Sand) for ST02 – 36 units",
+      "reason": "Current on‑hand stock (48 units) provides only ~13 days of cover at the recent average demand of 3.67 units/day, which is below the 21‑day supplier lead time. To cover the next 21 days (≈77 units) and include a safety buffer, we need to raise inventory to about 84 units. Ordering 36 units (six 6‑unit case packs) will bring stock to 84 units, ensuring sufficient cover.",
       "status": "auto_approved",
       "decided_at": "2026-03-10T21:00:00",
       "decided_by": "Action policy (Auto-approval Limit)",

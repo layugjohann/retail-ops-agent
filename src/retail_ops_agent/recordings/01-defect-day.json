@@ -352,7 +352,7 @@
       "sent_at": "2026-11-02T21:00:00",
       "recipient": "manager.st03@cobalthome.example",
       "subject": "Upload ST03-2026-11-02-sales-001 is Quarantined: please correct it and resend",
-      "body": "Your sales Upload for ST03 on 2026-11-02 (ST03-2026-11-02-sales-001) is in Quarantine, so none of its rows are in the BI data yet.\n\nPlease correct the following and resend the whole file for the same day; it will replace this one.\n\n1. Missing column in the header (row 1): column sku is missing. What to do: Add this column to the header and fill it in on every row, as in your usual export.\n\nNote from the Intake agent: Your upload is missing the required 'sku' column. Please add this column and resend the file."
+      "body": "Your sales Upload for ST03 on 2026-11-02 (ST03-2026-11-02-sales-001) is in Quarantine, so none of its rows are in the BI data yet.\n\nPlease correct the following and resend the whole file for the same day; it will replace this one.\n\n1. Missing column in the header (row 1): column sku is missing. What to do: Add this column to the header and fill it in on every row, as in your usual export.\n\nNote from the Intake agent: The upload is missing the required 'sku' column. Please add a column named 'sku' to the file."
      }
     ],
     "anomalies": [],

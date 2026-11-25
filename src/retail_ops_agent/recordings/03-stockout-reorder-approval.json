@@ -125,6 +125,7 @@
       "sku": "CH-0026",
       "on_hand": 25,
       "average_daily_units": 1.56,
+      "usual_daily_units": 0.12,
       "sales_days": 9,
       "days_of_cover": 16.1,
       "lead_time_days": 21
@@ -141,22 +142,23 @@
        "sku": "CH-0026",
        "on_hand": 25,
        "average_daily_units": 1.56,
+       "usual_daily_units": 0.12,
        "sales_days": 9,
        "days_of_cover": 16.1,
        "lead_time_days": 21
       },
       "investigated_at": "2026-03-10T21:00:00",
       "investigated_by": "Analyst agent",
-      "cause": "A sudden sales spike of 13 units on 2026-03-10 sharply reduced on‑hand stock, leaving only 16 days of cover versus a 21‑day supplier lead time.",
+      "cause": "A sudden demand spike of 13 units on 2026-03-10 sharply reduced on‑hand inventory, leaving only 16 days of cover which is below the 21‑day supplier lead time.",
       "evidence": [
        "Sales history shows 0 units sold each day from 2026-03-02 to 2026-03-08, then 1 unit on 2026-03-09 and 13 units on 2026-03-10.",
-       "Stock history dropped from 38 units on 2026-03-09 to 25 units on 2026-03-10 after the 13‑unit sale.",
-       "Days of cover calculated as 25 ÷ 1.56 ≈ 16.1 days, which is below the 21‑day lead time.",
-       "Open reorders query returned no pending orders for SKU CH-0026 at sales channel ST05."
+       "On‑hand inventory dropped from 38 units on 2026-03-09 to 25 units on 2026-03-10.",
+       "Average daily units (including the spike) is 1.56, giving days of cover = 25 / 1.56 ≈ 16.1 days, which is less than the lead time of 21 days.",
+       "No open reorders exist for SKU CH-0026 at sales channel ST05."
       ],
       "recommended_action": {
        "kind": "reorder",
-       "description": "Place a reorder for CH-0026 to bring inventory up to at least lead‑time coverage (≈33 units). Ordering 12 units (3 case packs of 4) will raise on‑hand stock to 37, providing a safety buffer."
+       "description": "Create a reorder for 12 units (3 cases of 4) to raise inventory to cover the 21‑day lead time plus a short safety buffer."
       },
       "data_problem": null
      }
@@ -174,8 +176,8 @@
       "quantity": 12,
       "unit_cost": 19.31,
       "cost": 231.72,
-      "subject": "Reorder Request: CH-0026 (Matte Basket, Sage) for ST05",
-      "reason": "A stockout risk was flagged for SKU CH-0026 on sales channel ST05: on‑hand inventory is 25 units, giving only ~16 days of cover versus the 21‑day supplier lead time. At the recent sales rate of 1.56 units/day, we need at least 33 units to cover the lead time. Ordering 12 units (3 case packs of 4) will raise on‑hand stock to 37 units, providing a safety buffer beyond the required coverage.",
+      "subject": "Reorder recommendation for CH-0026 (Matte Basket, Sage) – ST05",
+      "reason": "A sudden demand spike left only 16 days of cover (25 units) versus the 21‑day supplier lead time. At the recent average daily rate (1.56 units), we need about 33 units to cover the lead time; with 25 on hand we are short ~8 units. Adding a small safety buffer, a reorder of 12 units (3 × 4‑unit case packs) will raise inventory to ~37 units, restoring coverage beyond the lead time.",
       "status": "pending",
       "decided_at": null,
       "decided_by": null,
@@ -200,8 +202,8 @@
       "quantity": 12,
       "unit_cost": 19.31,
       "cost": 231.72,
-      "subject": "Reorder Request: CH-0026 (Matte Basket, Sage) for ST05",
-      "reason": "A stockout risk was flagged for SKU CH-0026 on sales channel ST05: on‑hand inventory is 25 units, giving only ~16 days of cover versus the 21‑day supplier lead time. At the recent sales rate of 1.56 units/day, we need at least 33 units to cover the lead time. Ordering 12 units (3 case packs of 4) will raise on‑hand stock to 37 units, providing a safety buffer beyond the required coverage.",
+      "subject": "Reorder recommendation for CH-0026 (Matte Basket, Sage) – ST05",
+      "reason": "A sudden demand spike left only 16 days of cover (25 units) versus the 21‑day supplier lead time. At the recent average daily rate (1.56 units), we need about 33 units to cover the lead time; with 25 on hand we are short ~8 units. Adding a small safety buffer, a reorder of 12 units (3 × 4‑unit case packs) will raise inventory to ~37 units, restoring coverage beyond the lead time.",
       "status": "pending",
       "decided_at": null,
       "decided_by": null,
@@ -249,8 +251,8 @@
       "quantity": 12,
       "unit_cost": 19.31,
       "cost": 231.72,
-      "subject": "Reorder Request: CH-0026 (Matte Basket, Sage) for ST05",
-      "reason": "A stockout risk was flagged for SKU CH-0026 on sales channel ST05: on‑hand inventory is 25 units, giving only ~16 days of cover versus the 21‑day supplier lead time. At the recent sales rate of 1.56 units/day, we need at least 33 units to cover the lead time. Ordering 12 units (3 case packs of 4) will raise on‑hand stock to 37 units, providing a safety buffer beyond the required coverage.",
+      "subject": "Reorder recommendation for CH-0026 (Matte Basket, Sage) – ST05",
+      "reason": "A sudden demand spike left only 16 days of cover (25 units) versus the 21‑day supplier lead time. At the recent average daily rate (1.56 units), we need about 33 units to cover the lead time; with 25 on hand we are short ~8 units. Adding a small safety buffer, a reorder of 12 units (3 × 4‑unit case packs) will raise inventory to ~37 units, restoring coverage beyond the lead time.",
       "status": "approved",
       "decided_at": "2026-03-11T21:00:00",
       "decided_by": "inventory planner (recorded)",
@@ -267,7 +269,7 @@
        "recorded_at": "2026-03-11T21:00:00",
        "action": "reorder",
        "tier": 2,
-       "triggered_by": "Reorder Request: CH-0026 (Matte Basket, Sage) for ST05 (INV-stockout_risk:ST05:CH-0026:2026-03-10); approved by inventory planner (recorded)",
+       "triggered_by": "Reorder recommendation for CH-0026 (Matte Basket, Sage) – ST05 (INV-stockout_risk:ST05:CH-0026:2026-03-10); approved by inventory planner (recorded)",
        "taken_by": "inventory planner (recorded)",
        "summary": "Placed Reorder RO-00001: 12 units of CH-0026 for ST05 from Oakfold Furniture, cost 231.72",
        "upload_id": null,

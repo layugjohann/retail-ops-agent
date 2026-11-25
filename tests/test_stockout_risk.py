@@ -141,6 +141,12 @@ def test_stockout_risk_detection_is_plain_statistics_over_the_accepted_data(
     assert anomaly.on_hand == on_hand[anomaly.sku]
     assert anomaly.sales_days == len(window)
     assert anomaly.average_daily_units == round(sold / len(window), 2)
+    on_the_day = sum(
+        r.quantity_sold for r in history.sales(SALES_CHANNEL, anomaly.day) if r.sku == anomaly.sku
+    )
+    # The usual rate leaves the Anomaly's own day out, so a spike on the day can be compared with it.
+    assert anomaly.usual_daily_units == round((sold - on_the_day) / (len(window) - 1), 2)
+    assert f"usually {anomaly.usual_daily_units:.2f}" in anomaly.summary
     assert anomaly.lead_time_days == next(s.lead_time_days for s in catalog.skus if s.code == anomaly.sku)
 
 
