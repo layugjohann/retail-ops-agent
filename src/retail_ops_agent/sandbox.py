@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import tempfile
 from collections.abc import Callable, Sequence
+from copy import deepcopy
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from retail_ops_agent.erp import ErpClient, InMemoryErp
 from retail_ops_agent.generator import (
     AnomalyPlan,
     DefectPlan,
+    GeneratedUploads,
     GroundTruth,
     InjectionPlan,
     LookalikePlan,
@@ -52,6 +54,7 @@ def build_sandbox(
     run_days: int | None = None,
     erp: ErpClient | None = None,
     on_ops_day: Callable[[OpsDay, OpsDayOutcome], None] | None = None,
+    generated: GeneratedUploads | None = None,
 ) -> OpsDay:
     """Submit every Sales Channel's sales and inventory Uploads for each day and process those Ops Days.
 
@@ -70,6 +73,9 @@ def build_sandbox(
 
     on_ops_day, if given, is called with the Ops Day and its outcome after each Ops Day is processed,
     so Replay Mode can record it.
+
+    generated, if given, is the Uploads already generated for exactly this seed, day range and plans
+    (an eval generates them to grade against), so they are not generated a second time.
     """
     directory = upload_directory or Path(tempfile.mkdtemp(prefix="cobalt-home-uploads-"))
     directory.mkdir(parents=True, exist_ok=True)
@@ -88,6 +94,7 @@ def build_sandbox(
         upload_kinds=upload_kinds,
         auto_approval_limit=auto_approval_limit,
         erp=erp,
+        generated=generated,
     )
     sandbox.ground_truth.write(directory / GROUND_TRUTH_FILE)
     days_run = sandbox.days[:run_days]
@@ -123,15 +130,21 @@ class Sandbox:
         auto_approval_limit: float = DEFAULT_AUTO_APPROVAL_LIMIT,
         erp: ErpClient | None = None,
         notifier: Notifier | None = None,
+        generated: GeneratedUploads | None = None,
     ) -> None:
-        """notifier receives the sandbox's messages to Uploaders and alerts; a LogNotifier by default."""
+        """notifier receives the sandbox's messages to Uploaders and alerts; a LogNotifier by default.
+
+        generated, if given, is the Uploads already generated for exactly this seed, day range and
+        plans, used instead of generating them again."""
         catalog = generate_catalog(seed)
-        self._generated = generate_uploads(
-            generate_history(catalog, first_day, days, anomalies, lookalikes),
-            defects,
-            resubmissions,
-            injections,
-        )
+        if generated is None:
+            generated = generate_uploads(
+                generate_history(catalog, first_day, days, anomalies, lookalikes),
+                defects,
+                resubmissions,
+                injections,
+            )
+        self._generated = generated
         self._resubmissions = tuple(resubmissions)
         self._upload_kinds = tuple(upload_kinds)
         self._clock = SimulatedClock(datetime.combine(first_day, UPLOAD_TIME))
@@ -152,6 +165,16 @@ class Sandbox:
         self._submitted: date | None = None
         # Uploads submitted by hand for a day not yet run; the generated ones are left out for them.
         self._own: set[tuple[str, date, UploadKind]] = set()
+
+    def __deepcopy__(self, memo: dict[int, object]) -> Sandbox:
+        """An independent copy of this sandbox at the same point, so a seeded sandbox can be built once
+        and copied. The generated Uploads are only ever read, so the copy shares them."""
+        memo[id(self._generated)] = self._generated
+        copy = Sandbox.__new__(Sandbox)
+        memo[id(self)] = copy
+        for name, value in vars(self).items():
+            setattr(copy, name, deepcopy(value, memo))
+        return copy
 
     @property
     def days(self) -> tuple[date, ...]:

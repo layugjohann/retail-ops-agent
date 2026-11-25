@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from copy import deepcopy
 from pathlib import Path
 
 import pandas as pd
@@ -13,6 +14,7 @@ from streamlit.testing.v1 import AppTest
 
 from retail_ops_agent import live
 from retail_ops_agent.ops_day import Models
+from retail_ops_agent.sandbox import Sandbox
 
 APP = Path(__file__).resolve().parent.parent / "dashboard" / "app.py"
 
@@ -21,6 +23,19 @@ def _live_app() -> AppTest:
     """The dashboard switched from its default, Replay Mode, to Live Mode."""
     app = AppTest.from_file(str(APP), default_timeout=120).run()
     return app.radio(key="mode").set_value("Live Mode").run()
+
+
+@pytest.fixture(autouse=True)
+def _seeded_copies(  # pyright: ignore[reportUnusedFunction]
+    seeded_live_sandbox: Sandbox, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each Visitor's sandbox, and each one built again on reset, is a copy of the session's seeded
+    sandbox rather than seeded again, which takes seconds."""
+
+    def seeded_copy() -> Sandbox:
+        return deepcopy(seeded_live_sandbox)
+
+    monkeypatch.setattr(live, "new_live_sandbox", seeded_copy)
 
 
 @pytest.fixture

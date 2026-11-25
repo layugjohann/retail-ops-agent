@@ -6,6 +6,7 @@ import json
 from datetime import date, datetime
 
 import duckdb
+import pandas as pd
 from pydantic import TypeAdapter
 
 from retail_ops_agent.analyst import Investigation
@@ -88,14 +89,28 @@ _ANOMALY: TypeAdapter[Anomaly] = TypeAdapter(Anomaly)
 
 # Upload statuses whose rows are in the BI data.
 _LOADED = "'accepted', 'safe_fixed'"
-# Rows per INSERT statement when loading an Upload.
-_INSERT_BATCH = 500
 
 
 class BiStore:
     def __init__(self, database: str = ":memory:") -> None:
         self._db = duckdb.connect(database)
         self._db.execute(_SCHEMA)
+
+    def __deepcopy__(self, memo: dict[int, object]) -> BiStore:
+        """An independent in-memory copy of every table on this store's connection (the Audit Log's and
+        Approval Queue's included), rows in the same order. The copy's connection replaces this one
+        wherever the same deepcopy reaches it, so an Ops Day's Audit Log and Approval Queue follow."""
+        copy = BiStore.__new__(BiStore)
+        copy._db = duckdb.connect()
+        memo[id(self)] = copy
+        memo[id(self._db)] = copy._db
+        tables = self._db.execute("SELECT table_name, sql FROM duckdb_tables() ORDER BY table_name")
+        for name, create in tables.fetchall():
+            copy._db.execute(create)
+            copy._db.register("_copied_rows", self._db.sql(f'SELECT * FROM "{name}"').to_arrow_table())
+            copy._db.execute(f'INSERT INTO "{name}" SELECT * FROM _copied_rows')
+            copy._db.unregister("_copied_rows")
+        return copy
 
     @property
     def connection(self) -> duckdb.DuckDBPyConnection:
@@ -304,14 +319,9 @@ class BiStore:
         )
 
     def _insert(self, table: str, rows: list[tuple[object, ...]]) -> None:
-        """Insert rows in one multi-row statement; DuckDB's executemany is slow row by row."""
-        for start in range(0, len(rows), _INSERT_BATCH):
-            batch = rows[start : start + _INSERT_BATCH]
-            placeholders = "(" + ", ".join("?" * len(batch[0])) + ")"
-            self._db.execute(
-                f"INSERT INTO {table} VALUES " + ", ".join([placeholders] * len(batch)),
-                [value for row in batch for value in row],
-            )
+        """Insert rows, in the table's column order, from a DataFrame: about ten times faster than one
+        multi-row INSERT ... VALUES statement, and DuckDB's executemany is slower still."""
+        self._db.from_df(pd.DataFrame(rows)).insert_into(table)
 
     def uploads(self) -> list[UploadOutcome]:
         rows = self._db.execute(

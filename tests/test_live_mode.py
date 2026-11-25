@@ -57,8 +57,8 @@ def _without_last_column(csv: str) -> str:
 
 
 @pytest.fixture
-def sandbox() -> Sandbox:
-    return new_live_sandbox()
+def sandbox(live_sandbox: Sandbox) -> Sandbox:
+    return live_sandbox
 
 
 def test_a_live_sandbox_is_seeded_from_the_generator_with_days_left_to_run(sandbox: Sandbox) -> None:

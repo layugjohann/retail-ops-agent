@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 
@@ -12,8 +13,10 @@ from retail_ops_agent.clock import SimulatedClock
 from retail_ops_agent.data_source import CsvDataSource
 from retail_ops_agent.erp import InMemoryErp
 from retail_ops_agent.generator import generate_catalog
+from retail_ops_agent.live import new_live_sandbox
 from retail_ops_agent.notifier import LogNotifier
 from retail_ops_agent.ops_day import Models, OpsDay
+from retail_ops_agent.sandbox import Sandbox
 
 # Unit tests never reach a real model.
 models.ALLOW_MODEL_REQUESTS = False
@@ -83,3 +86,16 @@ def ops_day(catalog: Catalog, clock: SimulatedClock, notifier: LogNotifier, tmp_
         data_source=CsvDataSource(tmp_path / "uploads"),
         clock=clock,
     )
+
+
+@pytest.fixture(scope="session")
+def seeded_live_sandbox() -> Sandbox:
+    """The Live Mode sandbox, seeded once per session (once per xdist worker): seeding runs its first
+    Ops Days, which takes seconds. Tests never use it directly, only a copy from live_sandbox."""
+    return new_live_sandbox()
+
+
+@pytest.fixture
+def live_sandbox(seeded_live_sandbox: Sandbox) -> Sandbox:
+    """A freshly seeded Live Mode sandbox of this test's own: a copy, so no test sees another's changes."""
+    return deepcopy(seeded_live_sandbox)
