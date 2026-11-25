@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import random
 from datetime import date
+from functools import cache
 
 from retail_ops_agent.catalog import Catalog, SalesChannelKind, Sku
 
@@ -59,6 +60,7 @@ class DemandModel:
         }
 
 
+@cache
 def _season_factor(day: date, category: str) -> float:
     day_of_year = day.timetuple().tm_yday
     if category in _SUMMER_CATEGORIES:

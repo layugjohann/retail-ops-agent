@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Mapping
+from copy import deepcopy
 from enum import StrEnum
 from typing import Protocol
 
@@ -103,6 +104,17 @@ class InMemoryErp:
         # The ERP MCP server runs each tool call on its own worker thread, so Reorder changes are
         # serialised: otherwise two Reorders placed at once could get the same id and one be lost.
         self._reorders_lock = threading.Lock()
+
+    def __deepcopy__(self, memo: dict[int, object]) -> InMemoryErp:
+        """An independent copy of the ERP's state, with a lock of its own (a lock cannot be copied)."""
+        copy = InMemoryErp.__new__(InMemoryErp)
+        memo[id(self)] = copy
+        with self._reorders_lock:
+            for name, value in vars(self).items():
+                if name != "_reorders_lock":
+                    setattr(copy, name, deepcopy(value, memo))
+        copy._reorders_lock = threading.Lock()
+        return copy
 
     def list_sales_channels(self) -> list[SalesChannel]:
         return list(self._catalog.sales_channels)

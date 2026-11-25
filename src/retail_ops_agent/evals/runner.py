@@ -119,6 +119,7 @@ def run_scenario(
         auto_approval_limit=scenario.auto_approval_limit,
         run_days=scenario.ops_days,
         erp=erp,
+        generated=generated,
     )
     for step in scenario.after_run:
         if step.step is AfterRunStepKind.ADVANCE_TIME:
