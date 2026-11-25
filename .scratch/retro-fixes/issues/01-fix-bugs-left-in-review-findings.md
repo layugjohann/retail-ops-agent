@@ -1,6 +1,6 @@
 # 01: Fix the bugs left in Review Findings
 
-Status: ready-for-agent
+Status: in-progress
 Blocked by: None
 
 **What to build:** Fix the bugs that Review Sessions logged as Non-critical Findings and that are still on `main`.
@@ -37,3 +37,15 @@ If it doesn't, say so in a comment and skip it.
 - Released Data Problem Quarantine: `_settle_upload` keeps the Data Problem's Defect only while its Quarantine
   stands (new `BiStore.remove_defects`). Undoing the undo brings the Defect back.
 - `SKU_KINDS` deleted.
+
+Usage: Implementer unknown; Review Session unknown.
+
+**Review Session: Non-critical Findings**
+
+- ApprovalStatus.CANCELLED (with cancelled_by / cancelled_at) is a new Approval Queue state but has no GLOSSARY.md entry, and GLOSSARY.md lists 'cancelled' as an Avoid word under Expired. Add a glossary entry that tells a cancelled-by-undo Reorder apart from an Expired one.
+- OpsDay._settle_upload removes and re-adds each Data Problem Quarantine's Defect in Audit Log order. If two Data Problem Quarantines on one Upload carried the same Defect, and the earlier one stood while the later one was undone, the Defect would be dropped. This doesn't look reachable today, but the logic is order-dependent.
+- BiStore.remove_defects repeats add_defects's 'SELECT defects ... / KeyError if missing' lookup; a small shared helper would remove the duplication.
+
+**Gate passed**: every command exited 0 (log: `.sandcastle/logs/gate-01-2026-11-25T14-16-56-129Z.log`).
+
+Usage: Body writer 2 input, 1,685 output, 20,639 cache creation, 11,837 cache read.
