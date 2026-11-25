@@ -4,10 +4,10 @@ from datetime import date, timedelta
 
 import pytest
 
+from retail_ops_agent import defects
 from retail_ops_agent.audit_log import ActionTier, AuditAction, UndoOperation
 from retail_ops_agent.catalog import Catalog
 from retail_ops_agent.clock import SimulatedClock
-from retail_ops_agent import defects
 from retail_ops_agent.defects import SAFE_FIX_TABLE, DefectKind
 from retail_ops_agent.generator import (
     PLANTABLE_DEFECTS,

@@ -217,6 +217,7 @@ class SlowMover(_AnomalyBase):
 
 type Anomaly = Annotated[StockoutRisk | SalesDrop | SalesSpike | SlowMover, Field(discriminator="kind")]
 
+
 class SalesAndStock(Protocol):
     """The read-only BI queries detection needs."""
 
