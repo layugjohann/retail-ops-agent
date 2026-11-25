@@ -1,7 +1,8 @@
 # 02: Make the test suite fast again
 
-Status: ready-for-agent
+Status: in-progress
 Blocked by: None
+Stacked on: issue/01-fix-bugs-left-in-review-findings
 
 **What to build:** Cut the wall time of `uv run pytest`. It grew from 22 s (Gate at Issue 01) to about 6.5 min
 (Issue 17), and Implementers and Review Sessions run it many times per Issue.
@@ -50,3 +51,16 @@ xdist alone brought the suite to about 105 s. CPU is the limit, so it also took 
 No test broke when run in parallel. Each test writes under `tmp_path`, and every port and cache is per process.
 Six parallel runs all passed. `make` can't run inside the sandbox (the Xcode `make` shim is blocked), so I ran
 its four commands (ruff check, ruff format --check, pyright, pytest) directly, and all passed.
+
+Usage: Implementer 124 input, 33,734 output, 109,598 cache creation, 4,935,176 cache read; Review Session 20 input, 4,784 output, 33,534 cache creation, 371,390 cache read.
+
+**Review Session: Non-critical Findings**
+
+- BiStore.__deepcopy__ relies on OpsDay assigning _bi before _audit and _queue (the order vars() walks), so the store's copy is in the memo before the Audit Log and Approval Queue reach the shared DuckDB connection. Reordering those attributes would make deepcopy try to copy the raw connection and fail with an unclear error.
+- The new `generated` parameter on build_sandbox/Sandbox is trusted to match seed, first_day, days and the plans; nothing checks it, so a mismatched argument would silently build a different sandbox. Only the eval runner passes it today, with matching values.
+- tests/test_dashboard.py `_seeded_copies` adds `# pyright: ignore[reportUnusedFunction]` without saying why (the standard asks for both the code and the reason); it follows the existing unexplained one in tests/conftest.py.
+- The Issue's acceptance checkboxes are left unticked even though the work and the timing comment are done.
+
+**Gate passed**: every command exited 0 (log: `.sandcastle/logs/gate-02-2026-11-25T15-02-44-525Z.log`).
+
+Usage: Body writer 2 input, 1,445 output, 18,781 cache creation, 11,837 cache read.
