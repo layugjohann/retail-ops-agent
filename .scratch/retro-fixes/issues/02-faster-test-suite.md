@@ -1,6 +1,7 @@
 # 02: Make the test suite fast again
 
-Status: in-progress
+Status: awaiting-merge
+Pull Request: https://github.com/layugjohann/retail-ops-agent/pull/27
 Blocked by: None
 Stacked on: issue/01-fix-bugs-left-in-review-findings
 
@@ -64,3 +65,7 @@ Usage: Implementer 124 input, 33,734 output, 109,598 cache creation, 4,935,176 c
 **Gate passed**: every command exited 0 (log: `.sandcastle/logs/gate-02-2026-11-25T15-02-44-525Z.log`).
 
 Usage: Body writer 2 input, 1,445 output, 18,781 cache creation, 11,837 cache read.
+
+**Pull Request opened**: https://github.com/layugjohann/retail-ops-agent/pull/27
+
+Stacked on Base Issue 01: this Pull Request targets `issue/01-fix-bugs-left-in-review-findings`, the branch of https://github.com/layugjohann/retail-ops-agent/pull/26. Merge that Pull Request first.
