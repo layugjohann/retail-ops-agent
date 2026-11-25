@@ -1,6 +1,7 @@
 # 04: Lint the mechanical coding standards
 
-Status: in-progress
+Status: awaiting-merge
+Pull Request: https://github.com/layugjohann/retail-ops-agent/pull/29
 Blocked by: None
 
 **What to build:** Turn the coding standards that are fixed patterns into checks in `make check`, so only a Review
@@ -34,3 +35,5 @@ Usage: Implementer 62 input, 13,002 output, 48,622 cache creation, 1,375,732 cac
 **Gate passed**: every command exited 0 (log: `.sandcastle/logs/gate-04-2026-11-25T15-40-17-604Z.log`).
 
 Usage: Body writer 2 input, 1,134 output, 16,692 cache creation, 11,837 cache read.
+
+**Pull Request opened**: https://github.com/layugjohann/retail-ops-agent/pull/29
