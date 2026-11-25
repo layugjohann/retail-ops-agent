@@ -162,13 +162,19 @@ def test_dashboard_advancing_simulated_time_expires_the_pending_reorder() -> Non
     [action_id] = list(app.dataframe[5].value["Action"])
 
     app.button(key="advance-time").click().run()
-    assert list(app.dataframe[5].value["Action"]) == [action_id]
-    app.button(key="advance-time").click().run()
 
     assert not app.exception
+    assert _expired_warnings(app) == [f"Expired: {action_id}"]
     assert any("Nothing waiting for Approval" in i.value for i in app.info)
     assert list(app.dataframe[5].value["decision"]) == ["expired"]
     assert "reorder" not in set(app.dataframe[-1].value["Action"])
+    # The warning is shown once, not again on the next advance.
+    app.button(key="advance-time").click().run()
+    assert _expired_warnings(app) == []
+
+
+def _expired_warnings(app: AppTest) -> list[str]:
+    return [w.value for w in app.warning if w.value.startswith("Expired")]
 
 
 NEXT_DAY = "2026-11-14"

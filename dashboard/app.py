@@ -49,6 +49,8 @@ TIME_STEP = timedelta(hours=24)
 SANDBOX_KEY = "live-sandbox"
 OWN_KEY_NEEDED = "live-own-key-needed"
 LAST_RUN = "live-last-run"
+# The Actions that Expired when simulated time last advanced, shown once after the rerun.
+EXPIRED_NOTICE = "live-expired-notice"
 
 
 @st.cache_resource
@@ -67,7 +69,7 @@ def _sandbox() -> Sandbox:
 
 
 def _reset() -> None:
-    for key in (SANDBOX_KEY, OWN_KEY_NEEDED, LAST_RUN):
+    for key in (SANDBOX_KEY, OWN_KEY_NEEDED, LAST_RUN, EXPIRED_NOTICE):
         st.session_state.pop(key, None)
 
 
@@ -327,8 +329,12 @@ def _live_mode() -> None:
     if advance_column.button("Advance simulated time 24 hours", key="advance-time"):
         expired = ops_day.advance_time(TIME_STEP)
         if expired:
-            st.warning("Expired: " + ", ".join(e.action_id for e in expired))
+            # A warning shown now would be wiped by the rerun, so the next render shows it.
+            st.session_state[EXPIRED_NOTICE] = "Expired: " + ", ".join(e.action_id for e in expired)
         st.rerun()
+    notice: str | None = st.session_state.pop(EXPIRED_NOTICE, None)
+    if notice:
+        st.warning(notice)
     causes = {i.investigation_id: i.cause for i in investigations}
     queue = ops_day.approval_queue()
     if not queue:
