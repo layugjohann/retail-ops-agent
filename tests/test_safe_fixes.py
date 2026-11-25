@@ -4,6 +4,7 @@ from datetime import date, timedelta
 
 import pytest
 
+from retail_ops_agent import defects
 from retail_ops_agent.audit_log import ActionTier, AuditAction, UndoOperation
 from retail_ops_agent.catalog import Catalog
 from retail_ops_agent.clock import SimulatedClock
@@ -239,3 +240,20 @@ def test_semicolons_with_decimal_commas_are_not_guessed_at(ops_day: OpsDay, cata
 
     assert [u.status for u in outcome.uploads] == [UploadStatus.QUARANTINED]
     assert [e.action for e in outcome.audit_entries] == [AuditAction.QUARANTINE]
+
+
+@pytest.mark.parametrize("defect_kind", SAFE_FIXABLE)
+def test_a_defect_kind_the_safe_fix_table_marks_unsafe_is_quarantined_not_fixed(
+    ops_day: OpsDay, catalog: Catalog, monkeypatch: pytest.MonkeyPatch, defect_kind: DefectKind
+) -> None:
+    monkeypatch.setattr(defects, "SAFE_FIX_TABLE", {**SAFE_FIX_TABLE, defect_kind: False})
+    generated = _generate(catalog, ("ST01", UploadKind.SALES, defect_kind))
+    _submit(ops_day, "ST01", UploadKind.SALES, generated.content("ST01", DAY, UploadKind.SALES))
+
+    outcome = ops_day.run_ops_day(DAY)
+
+    [upload] = outcome.uploads
+    assert upload.status is UploadStatus.QUARANTINED
+    assert defect_kind in {d.kind for d in upload.defects}
+    assert all(e.action is not AuditAction.SAFE_FIX for e in outcome.audit_entries)
+    assert ops_day.sales_by_sales_channel() == []

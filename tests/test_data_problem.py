@@ -346,3 +346,21 @@ def _always_data_problem_analyst() -> FunctionModel:
         return _output(info, _data_problem([date.fromisoformat(anomaly["day"])]))
 
     return FunctionModel(analyst)
+
+
+def test_releasing_a_data_problems_quarantine_takes_its_defect_off_the_upload(
+    catalog: Catalog, tmp_path: Path
+) -> None:
+    generated = _generate(catalog)
+    ops_day, _ = _run(catalog, tmp_path, generated, analyst=_data_problem())
+    entry = next(e for e in ops_day.audit_log() if e.action is AuditAction.QUARANTINE)
+
+    def defects() -> list[DefectKind]:
+        upload = next(u for u in ops_day.upload_statuses() if u.upload_id == entry.upload_id)
+        return [d.kind for d in upload.defects]
+
+    undo = ops_day.undo(entry.entry_id, taken_by="bi.analyst@cobalthome.example")
+    assert defects() == []
+
+    ops_day.undo(undo.entry_id, taken_by="bi.analyst@cobalthome.example")
+    assert defects() == [DATA_PROBLEM_DEFECT]

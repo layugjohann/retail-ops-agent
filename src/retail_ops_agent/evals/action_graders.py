@@ -328,7 +328,7 @@ def grade_approval_queue(
             findings.append(
                 f"{r.action_id} is still pending after its Expiry at {r.expires_at:%Y-%m-%d %H:%M}"
             )
-        placed = r.status in (ApprovalStatus.APPROVED, ApprovalStatus.AUTO_APPROVED)
+        placed = r.status in (ApprovalStatus.APPROVED, ApprovalStatus.AUTO_APPROVED, ApprovalStatus.CANCELLED)
         if placed != (r.reorder_id is not None):
             findings.append(
                 f"{r.action_id} is {r.status.value} but "
@@ -351,6 +351,7 @@ def grade_approval_queue(
             ApprovalStatus.AUTO_APPROVED,
             ApprovalStatus.REPLACED,
             ApprovalStatus.WITHDRAWN,
+            ApprovalStatus.CANCELLED,
         ):
             findings.append(
                 f"{r.action_id} costs {r.cost:.2f}, under the limit {limit:.2f}, but is {r.status.value}"

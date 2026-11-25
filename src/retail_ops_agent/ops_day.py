@@ -566,6 +566,17 @@ class OpsDay:
         """Undo an entry already checked to be undoable, recording the undo as a new entry."""
         if target.action is AuditAction.REORDER:
             self._erp.cancel_reorder(_required(target.undo.reorder_id))
+            for item in self._queue.all():
+                if item.audit_entry_id == target.entry_id:
+                    self._queue.save(
+                        item.model_copy(
+                            update={
+                                "status": ApprovalStatus.CANCELLED,
+                                "cancelled_by": taken_by,
+                                "cancelled_at": self._clock.now(),
+                            }
+                        )
+                    )
         entry = self._audit.append(
             recorded_at=self._clock.now(),
             action=AuditAction.UNDO,
@@ -862,6 +873,13 @@ class OpsDay:
         fixes = [e for e in entries if e.action is AuditAction.SAFE_FIX]
         upload = self._processed_upload(upload_id)
         self._bi.unload(upload_id)
+        # A Data Problem's Defect is the Upload's only while that Quarantine stands: a release gives
+        # back the Upload as it was, and reinstating the Quarantine brings the Defect back.
+        for quarantine in quarantines:
+            if quarantine.investigation_id is not None and quarantine.defect is not None:
+                self._bi.remove_defects(upload_id, [quarantine.defect])
+                if quarantine.undone_by is None:
+                    self._bi.add_defects(upload_id, [quarantine.defect])
         if (quarantines and quarantines[-1].undone_by is None) or any(e.undone_by is not None for e in fixes):
             self._bi.set_status(upload_id, UploadStatus.QUARANTINED, self._clock.now())
             return
@@ -942,7 +960,8 @@ class OpsDay:
     def reorders(self) -> list[QueuedReorder]:
         """Every Reorder proposed, newest first, with its Approval status: pending, approved by a
         person, approved under the Auto-approval Limit, rejected, replaced by a newer
-        Investigation's Reorder, Expired, or withdrawn after a Supersede."""
+        Investigation's Reorder, Expired, withdrawn after a Supersede, or cancelled by an undo after it
+        was placed."""
         self._expire()
         return self._queue.all()
 

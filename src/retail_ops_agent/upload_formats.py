@@ -166,7 +166,10 @@ def parse_upload(
     fixes = apply_safe_fixes(upload.content, COLUMNS[upload_format], (FREE_TEXT_COLUMNS[upload_format],))
     reader = csv.DictReader(io.StringIO(fixes.content))
     parsed = ParsedUpload(
-        format=upload_format, columns=list(reader.fieldnames or []), safe_fixed=list(fixes.fixed)
+        format=upload_format,
+        columns=list(reader.fieldnames or []),
+        defects=list(fixes.unfixed),
+        safe_fixed=list(fixes.fixed),
     )
     missing = [c for c in COLUMNS[upload_format] if c not in parsed.columns]
     for column in missing:

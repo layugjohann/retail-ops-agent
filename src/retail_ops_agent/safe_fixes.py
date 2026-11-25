@@ -9,7 +9,7 @@ from __future__ import annotations
 import csv
 import io
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from retail_ops_agent.defects import Defect, DefectKind, has_safe_fix
 
@@ -42,10 +42,15 @@ def normalise_header(header: str) -> str:
 
 @dataclass(frozen=True)
 class SafeFixResult:
-    """The Upload's content with every Safe Fix applied, and the Defects those fixes corrected."""
+    """The Upload's content with every Safe Fix applied, and the Defects those fixes corrected.
+
+    unfixed holds the Defects of a kind this module can correct but SAFE_FIX_TABLE says has no
+    Safe Fix: they were left in the content, and any one of them keeps the Upload out of the BI data.
+    """
 
     content: str
     fixed: list[Defect]
+    unfixed: list[Defect] = field(default_factory=list[Defect])
 
 
 def apply_safe_fixes(
@@ -53,64 +58,74 @@ def apply_safe_fixes(
 ) -> SafeFixResult:
     """Apply every Safe Fix that applies. Content with nothing to fix is returned unchanged.
 
+    Each fix runs only if SAFE_FIX_TABLE marks its Defect kind as safe; otherwise the Defect is
+    reported as unfixed and the content is left as it was.
     optional_columns may appear in the header beside the expected ones, such as a free-text column.
     """
     fixed: list[Defect] = []
+    unfixed: list[Defect] = []
+
+    def found(defect: Defect) -> bool:
+        """Record the Defect, and say whether its fix may be applied."""
+        if has_safe_fix(defect.kind):
+            fixed.append(defect)
+            return True
+        unfixed.append(defect)
+        return False
+
     text = content
-    if text.startswith(BYTE_ORDER_MARK):
-        text = text.removeprefix(BYTE_ORDER_MARK)
-        fixed.append(
-            Defect(
-                kind=DefectKind.BYTE_ORDER_MARK,
-                detail="the Upload starts with a byte order mark, which was removed",
-            )
+    if text.startswith(BYTE_ORDER_MARK) and found(
+        Defect(
+            kind=DefectKind.BYTE_ORDER_MARK,
+            detail="the Upload starts with a byte order mark, which was removed",
         )
+    ):
+        text = text.removeprefix(BYTE_ORDER_MARK)
 
     delimiter = _delimiter(text, expected_columns, optional_columns)
-    if delimiter != ",":
-        fixed.append(
-            Defect(
-                kind=DefectKind.WRONG_DELIMITER,
-                detail=f"values are separated by {delimiter!r} instead of commas",
-            )
+    if delimiter != "," and not found(
+        Defect(
+            kind=DefectKind.WRONG_DELIMITER,
+            detail=f"values are separated by {delimiter!r} instead of commas",
         )
+    ):
+        delimiter = ","
     rows = list(csv.reader(io.StringIO(text), delimiter=delimiter))
     if not rows:
-        return SafeFixResult(content=content, fixed=fixed)
+        return SafeFixResult(content=content, fixed=fixed, unfixed=unfixed)
 
     header = rows[0]
     for index, name in _renames(header, expected_columns).items():
-        fixed.append(
+        if found(
             Defect(
                 kind=DefectKind.RENAMED_COLUMN,
                 row=1,
                 column=name,
                 detail=f"column {header[index]!r} was read as {name}",
             )
-        )
-        header[index] = name
+        ):
+            header[index] = name
 
     for number, row in enumerate(rows[1:], start=2):
         for index, value in enumerate(row):
             stripped = value.strip()
             if stripped != value:
                 column = header[index] if index < len(header) else f"column {index + 1}"
-                fixed.append(
+                if found(
                     Defect(
                         kind=DefectKind.STRAY_WHITESPACE,
                         row=number,
                         column=column,
                         detail=f"value {value!r} in {column} had spaces around it",
                     )
-                )
-                row[index] = stripped
+                ):
+                    row[index] = stripped
 
-    assert all(has_safe_fix(d.kind) for d in fixed)
     if not fixed:
-        return SafeFixResult(content=content, fixed=[])
+        return SafeFixResult(content=content, fixed=[], unfixed=unfixed)
     buffer = io.StringIO()
     csv.writer(buffer, lineterminator="\n").writerows(rows)
-    return SafeFixResult(content=buffer.getvalue(), fixed=fixed)
+    return SafeFixResult(content=buffer.getvalue(), fixed=fixed, unfixed=unfixed)
 
 
 def _delimiter(text: str, expected_columns: tuple[str, ...], optional_columns: tuple[str, ...]) -> str:
