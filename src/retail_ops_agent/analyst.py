@@ -270,7 +270,8 @@ Anomaly, given to you as data. Its kind is one of:
   while plenty of stock sits on hand.
 A stockout_risk's average_daily_units includes the Anomaly's own day and gives its days of cover;
 its usual_daily_units leaves that day out. Compare a day's sales with usual_daily_units, never with
-an average that already contains them.
+an average that already contains them. A spike on the day is real demand: it still counts toward the
+days of cover, so the risk stands even when the spike is the first day of higher sales.
 Investigate its likely cause with your read-only tools. Look at what the data shows, for example:
 the SKU's sales, prices and stock history at the Sales Channel; how it sells at the other Sales
 Channels; the daily totals of every Sales Channel; how each category moved at the Sales Channel;
