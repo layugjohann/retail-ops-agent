@@ -873,6 +873,13 @@ class OpsDay:
         fixes = [e for e in entries if e.action is AuditAction.SAFE_FIX]
         upload = self._processed_upload(upload_id)
         self._bi.unload(upload_id)
+        # A Data Problem's Defect is the Upload's only while that Quarantine stands: a release gives
+        # back the Upload as it was, and reinstating the Quarantine brings the Defect back.
+        for quarantine in quarantines:
+            if quarantine.investigation_id is not None and quarantine.defect is not None:
+                self._bi.remove_defects(upload_id, [quarantine.defect])
+                if quarantine.undone_by is None:
+                    self._bi.add_defects(upload_id, [quarantine.defect])
         if (quarantines and quarantines[-1].undone_by is None) or any(e.undone_by is not None for e in fixes):
             self._bi.set_status(upload_id, UploadStatus.QUARANTINED, self._clock.now())
             return

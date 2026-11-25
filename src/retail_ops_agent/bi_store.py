@@ -148,6 +148,18 @@ class BiStore:
             "UPDATE uploads SET defects = ? WHERE upload_id = ?", [json.dumps(merged), upload_id]
         )
 
+    def remove_defects(self, upload_id: str, defects: list[Defect]) -> None:
+        """Take Defects added after Intake back off an Upload's Defects, one copy of each."""
+        row = self._db.execute("SELECT defects FROM uploads WHERE upload_id = ?", [upload_id]).fetchone()
+        if row is None:
+            raise KeyError(f"no processed Upload {upload_id}")
+        kept: list[object] = json.loads(row[0])
+        for defect in defects:
+            dumped = defect.model_dump(mode="json")
+            if dumped in kept:
+                kept.remove(dumped)
+        self._db.execute("UPDATE uploads SET defects = ? WHERE upload_id = ?", [json.dumps(kept), upload_id])
+
     def status(self, upload_id: str) -> UploadStatus:
         row = self._db.execute("SELECT status FROM uploads WHERE upload_id = ?", [upload_id]).fetchone()
         if row is None:
