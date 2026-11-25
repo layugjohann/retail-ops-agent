@@ -217,10 +217,6 @@ class SlowMover(_AnomalyBase):
 
 type Anomaly = Annotated[StockoutRisk | SalesDrop | SalesSpike | SlowMover, Field(discriminator="kind")]
 
-# The Anomaly kinds that are about one SKU; the others are about a whole Sales Channel.
-SKU_KINDS = frozenset({AnomalyKind.STOCKOUT_RISK, AnomalyKind.SALES_SPIKE, AnomalyKind.SLOW_MOVER})
-
-
 class SalesAndStock(Protocol):
     """The read-only BI queries detection needs."""
 
