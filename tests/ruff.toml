@@ -1,0 +1,10 @@
+# The tests use the project's ruff settings, except that they may import the ERP MCP server (ADR 0006).
+extend = "../pyproject.toml"
+# Keep the project root's first-party detection for import sorting.
+src = ["..", "../src"]
+
+[lint.flake8-tidy-imports.banned-api]
+"datetime.datetime.now".msg = "Times come from the injected clock (CODING_STANDARDS: Structure); use a SimulatedClock."
+"datetime.date.today".msg = "Times come from the injected clock (CODING_STANDARDS: Structure); use a SimulatedClock."
+"time.time".msg = "Times come from the injected clock (CODING_STANDARDS: Structure); use a SimulatedClock."
+"langgraph".msg = "Agents are built with Pydantic AI, not LangGraph (ADR 0004)."
