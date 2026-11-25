@@ -1,6 +1,6 @@
 # 02: Make the test suite fast again
 
-Status: awaiting-merge
+Status: done
 Pull Request: https://github.com/layugjohann/retail-ops-agent/pull/27
 Blocked by: None
 Stacked on: issue/01-fix-bugs-left-in-review-findings

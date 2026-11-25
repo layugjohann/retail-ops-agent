@@ -1,6 +1,6 @@
 # 01: Fix the bugs left in Review Findings
 
-Status: awaiting-merge
+Status: done
 Pull Request: https://github.com/layugjohann/retail-ops-agent/pull/26
 Blocked by: None
 

@@ -1,6 +1,6 @@
 # 03: CI runs the Gate on every push and Pull Request
 
-Status: awaiting-merge
+Status: done
 Pull Request: https://github.com/layugjohann/retail-ops-agent/pull/28
 Blocked by: 02
 Stacked on: issue/02-faster-test-suite
