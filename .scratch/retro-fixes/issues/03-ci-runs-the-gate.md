@@ -1,6 +1,7 @@
 # 03: CI runs the Gate on every push and Pull Request
 
-Status: in-progress
+Status: awaiting-merge
+Pull Request: https://github.com/layugjohann/retail-ops-agent/pull/28
 Blocked by: 02
 Stacked on: issue/02-faster-test-suite
 
@@ -27,3 +28,7 @@ Usage: Implementer 14 input, 1,752 output, 15,683 cache creation, 164,067 cache 
 **Gate passed**: every command exited 0 (log: `.sandcastle/logs/gate-03-2026-11-25T15-09-33-127Z.log`).
 
 Usage: Body writer 2 input, 1,047 output, 10,466 cache creation, 11,837 cache read.
+
+**Pull Request opened**: https://github.com/layugjohann/retail-ops-agent/pull/28
+
+Stacked on Base Issue 02: this Pull Request targets `issue/02-faster-test-suite`, the branch of https://github.com/layugjohann/retail-ops-agent/pull/27. Merge that Pull Request first.
