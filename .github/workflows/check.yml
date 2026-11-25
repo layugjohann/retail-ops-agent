@@ -1,0 +1,31 @@
+# Runs the same checks as the Sandcastle Gate, so work committed outside a Run passes it too.
+# No model key or secret is needed: evals stay out of `make check`, and so out of CI.
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+
+      - run: uv sync
+
+      - run: make check
