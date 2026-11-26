@@ -1,8 +1,8 @@
 # 05: Show provider retry waits, and cap them
 
-Status: ready-for-agent
+Status: done
+Pull Request: https://github.com/layugjohann/retail-ops-agent/pull/30
 Blocked by: None
-Stacked on: issue/04-lint-the-mechanical-standards
 
 **What to build:** Make `ThrottledModel` (`src/retail_ops_agent/evals/throttle.py`) say when and why it waits, and
 stop it from silently waiting for hours.
@@ -46,3 +46,9 @@ Usage: Implementer 52 input, 12,042 output, 42,146 cache creation, 1,032,581 cac
 - Live Mode stays unthrottled. A rate limit there keeps raising `OwnKeyNeeded` right away; waiting out a provider's
   retry would leave a Visitor looking at a hung page. The Live Mode checkbox is rewritten to say this, and the review's
   two message findings are now checkboxes. Back to `ready-for-agent`; finish on `issue/05-show-provider-retry-waits`.
+
+**Base Issue is no longer the top**: this Issue is stacked on Issue 04's branch `issue/04-lint-the-mechanical-standards`, but the top of the Stack is now Issue 06 (`issue/06-coding-standards-rules`, https://github.com/layugjohann/retail-ops-agent/pull/31). Starting it on its recorded Base Issue would split the Stack in two, so the Run did not start it. Either rebase `issue/05-show-provider-retry-waits` onto `issue/06-coding-standards-rules` and change the `Stacked on:` line to `issue/06-coding-standards-rules`, then set it back to ready-for-agent; or delete `issue/05-show-provider-retry-waits` and remove the `Stacked on:` line, then set it back to ready-for-agent so it restarts on the top of the Stack.
+
+**Finished by hand (2026-11-26):** the branch was rebased onto `main`, the three rescoped checkboxes were fixed in
+`8056ed6`, and https://github.com/layugjohann/retail-ops-agent/pull/30 was merged. The note above is stale: the Issue
+was left at `ready-for-agent` after the hand fix, so a Run picked it up again.

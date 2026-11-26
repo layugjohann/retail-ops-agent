@@ -1,6 +1,6 @@
 # 04: Lint the mechanical coding standards
 
-Status: awaiting-merge
+Status: done
 Pull Request: https://github.com/layugjohann/retail-ops-agent/pull/29
 Blocked by: None
 

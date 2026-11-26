@@ -1,6 +1,6 @@
 # 06: Coding standards: a Must rule for correctness, and a decision on the GLOSSARY rule
 
-Status: awaiting-merge
+Status: done
 Pull Request: https://github.com/layugjohann/retail-ops-agent/pull/31
 Blocked by: None
 
