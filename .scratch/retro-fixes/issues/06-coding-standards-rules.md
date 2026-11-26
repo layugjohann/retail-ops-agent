@@ -1,6 +1,7 @@
 # 06: Coding standards: a Must rule for correctness, and a decision on the GLOSSARY rule
 
-Status: ready-for-human
+Status: awaiting-merge
+Pull Request: https://github.com/layugjohann/retail-ops-agent/pull/31
 Blocked by: None
 
 **What to build:** Two edits to `.sandcastle/CODING_STANDARDS.md`. This Issue is `ready-for-human` because the second
@@ -26,3 +27,5 @@ edit is the owner's decision.
 **Decision (2026-11-26): delete the GLOSSARY rule.** Flagged in 10 of 22 reviews and never acted on, so it only cost
 review tokens. Naming a domain term is a judgement call, so glossary entries are now added by hand with
 `/domain-modeling` when a term matters. The correctness rule is added as the last item under `## Must`.
+
+**Pull Request opened**: https://github.com/layugjohann/retail-ops-agent/pull/31
