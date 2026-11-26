@@ -21,7 +21,7 @@ from retail_ops_agent.evals.judge import INVESTIGATION_RUBRIC, UPLOADER_MESSAGE_
 from retail_ops_agent.evals.runner import DEFAULT_SCENARIOS, generate_scenario, main
 from retail_ops_agent.evals.scenarios import FIRST_SUBMISSION, Scenario, load_scenarios, select_scenarios
 from retail_ops_agent.evals.scorecard import Scorecard
-from retail_ops_agent.evals.throttle import Throttle, ThrottledModel
+from retail_ops_agent.evals.throttle import ProviderWaitTooLong, Throttle, ThrottledModel
 from retail_ops_agent.generator import PLANTABLE_DEFECTS
 from retail_ops_agent.uploads import UploadStatus
 
@@ -486,3 +486,106 @@ def test_a_throttled_model_gives_up_on_a_provider_that_never_answers() -> None:
     )
     with pytest.raises(TimeoutError):
         Agent(model).run_sync("hello")
+
+
+def _groq_quota_spent(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+    raise ModelHTTPError(
+        429,
+        "llama-free",
+        {"error": {"message": "Rate limit reached for tokens per day: Limit 150000. Try again in 2h24m"}},
+        retry_after=2 * 3600 + 24 * 60,
+    )
+
+
+def test_a_throttled_model_logs_every_retry_it_waits_out(caplog: pytest.LogCaptureFixture) -> None:
+    time = _FakeTime()
+    calls: list[float] = []
+
+    def limited_once(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        calls.append(time.now)
+        if len(calls) == 1:
+            raise ModelHTTPError(
+                429, "llama-free", {"error": {"message": "Please try again in 7s"}}, retry_after=7.0
+            )
+        return ModelResponse(parts=[TextPart("ok")])
+
+    model = ThrottledModel(
+        FunctionModel(limited_once, model_name="llama-free"),
+        Throttle(0, monotonic=time.monotonic, sleep=time.sleep),
+    )
+    with caplog.at_level("WARNING", logger="retail_ops_agent.evals.throttle"):
+        output = Agent(model).run_sync("hello").output
+
+    assert output == "ok"
+    assert time.slept == [7.0]
+    [line] = caplog.messages
+    assert line == "llama-free: 429 on attempt 1, retrying in 7s: Please try again in 7s"
+
+
+def test_a_throttled_model_refuses_a_wait_over_its_cap_without_sleeping() -> None:
+    time = _FakeTime()
+    model = ThrottledModel(
+        FunctionModel(_groq_quota_spent, model_name="llama-free"),
+        Throttle(0, monotonic=time.monotonic, sleep=time.sleep),
+    )
+
+    with pytest.raises(ProviderWaitTooLong) as raised:
+        Agent(model).run_sync("hello")
+
+    assert time.slept == []
+    assert "asks to wait 2h24m: daily token limit likely spent" in str(raised.value)
+    assert "Limit 150000" in str(raised.value)
+
+
+def test_a_wait_over_the_cap_is_recorded_as_the_scenarios_error(tmp_path: Path) -> None:
+    code, table, scorecard = _run(
+        tmp_path,
+        "--scenario",
+        "resubmission-changes-figures",
+        "--no-judge",
+        intake=FunctionModel(_groq_quota_spent),
+    )
+
+    assert code == 1 and scorecard is not None
+    [scenario] = scorecard.scenarios
+    assert scenario.error is not None
+    assert scenario.error.startswith("ProviderWaitTooLong: ")
+    assert "asks to wait 2h24m: daily token limit likely spent" in scenario.error
+    assert "ERROR" in table
+
+
+def test_a_back_off_over_the_cap_is_not_blamed_on_the_provider() -> None:
+    time = _FakeTime()
+
+    def overloaded(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        raise ModelHTTPError(503, "llama-free", {"error": {"message": "Service unavailable"}})
+
+    model = ThrottledModel(
+        FunctionModel(overloaded, model_name="llama-free"),
+        Throttle(0, monotonic=time.monotonic, sleep=time.sleep),
+        backoff_seconds=400.0,
+    )
+
+    with pytest.raises(ProviderWaitTooLong) as raised:
+        Agent(model).run_sync("hello")
+
+    assert time.slept == []
+    assert "asks to wait" not in str(raised.value)
+    assert str(raised.value).startswith("Backing off 6m40s after 503 is over the 5m cap")
+
+
+def test_a_provider_wait_over_the_cap_but_under_a_day_names_the_cap() -> None:
+    time = _FakeTime()
+
+    def minutes_away(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        raise ModelHTTPError(429, "llama-free", {"error": {"message": "Try again in 10m"}}, retry_after=600.0)
+
+    model = ThrottledModel(
+        FunctionModel(minutes_away, model_name="llama-free"),
+        Throttle(0, monotonic=time.monotonic, sleep=time.sleep),
+    )
+
+    with pytest.raises(ProviderWaitTooLong) as raised:
+        Agent(model).run_sync("hello")
+
+    assert str(raised.value).startswith("function asks to wait 10m: over the 5m cap")
