@@ -1,6 +1,6 @@
 # 07: Triage the remaining Review Findings
 
-Status: ready-for-agent
+Status: in-progress
 Blocked by: 01
 
 **What to build:** Sweep every Non-critical Finding in the `## Comments` of
@@ -152,3 +152,15 @@ a separate decision.
   the wording "broken or malicious ones".
 - 20: The recording-only re-run of the last day in `build_sandbox` has no comment.
 - 22: No glossary entry for the trigger or the local inbox.
+
+Usage: Implementer unknown; Review Session 14 input, 4,816 output, 50,464 cache creation, 319,242 cache read.
+
+**Review Session: Non-critical Findings**
+
+- Inconsistent grouping: Issue 15's `_count_restock` bare ValueError/StopIteration with no message is listed as Style or naming only, while the same kind of Finding from Issue 10 (`_required` raising 'missing value') was filed as Issue 26.
+- Several Findings under 'Style or naming only' are dismissed because the code is unreachable, not because they are naming: Issue 02 `inventory_by_sku` fallback, Issue 10 `_cost` None, Issue 04 always-true `if result.uploader_message:`, Issue 18 unused `Decision.REJECT`. The last two are dead code under the project's no-dead-code rule and could be filed.
+- Issue 18's Finding that the core depends on the eval package (`models.py` imports `evals.throttle`) is structural, not style or naming, yet it is listed as Style or naming only.
+
+**Gate passed**: every command exited 0 (log: `.sandcastle/logs/gate-07-2026-11-26T13-59-11-341Z.log`).
+
+Usage: Body writer 2 input, 896 output, 29,904 cache creation, 11,837 cache read.
