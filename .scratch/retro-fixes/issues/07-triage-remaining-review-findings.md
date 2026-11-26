@@ -1,6 +1,7 @@
 # 07: Triage the remaining Review Findings
 
-Status: in-progress
+Status: awaiting-merge
+Pull Request: https://github.com/layugjohann/retail-ops-agent/pull/32
 Blocked by: 01
 
 **What to build:** Sweep every Non-critical Finding in the `## Comments` of
@@ -164,3 +165,5 @@ Usage: Implementer unknown; Review Session 14 input, 4,816 output, 50,464 cache 
 **Gate passed**: every command exited 0 (log: `.sandcastle/logs/gate-07-2026-11-26T13-59-11-341Z.log`).
 
 Usage: Body writer 2 input, 896 output, 29,904 cache creation, 11,837 cache read.
+
+**Pull Request opened**: https://github.com/layugjohann/retail-ops-agent/pull/32
