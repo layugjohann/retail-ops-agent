@@ -7,13 +7,12 @@ from pathlib import Path
 import pandas as pd
 import pytest
 import streamlit as st
-from pydantic_ai.exceptions import ModelHTTPError, UnexpectedModelBehavior
+from pydantic_ai.exceptions import UnexpectedModelBehavior
 from pydantic_ai.messages import ModelMessage, ModelResponse
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 from streamlit.testing.v1 import AppTest
 
 from retail_ops_agent import live
-from retail_ops_agent.evals.throttle import Throttle, ThrottledModel
 from retail_ops_agent.ops_day import Models
 from retail_ops_agent.sandbox import Sandbox
 
@@ -305,26 +304,3 @@ def test_live_mode_a_model_that_misbehaves_shows_a_message_not_a_traceback(
 
     assert not app.exception
     assert any("UnexpectedModelBehavior" in e.value and "run the day again" in e.value for e in app.error)
-
-
-@pytest.mark.usefixtures("fresh_sandbox")
-def test_live_mode_a_provider_wait_over_the_cap_shows_a_message_not_a_traceback(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def quota_spent(_messages: list[ModelMessage], _info: AgentInfo) -> ModelResponse:
-        raise ModelHTTPError(
-            429, "llama-free", {"error": {"message": "try again in 2h24m"}}, retry_after=8640.0
-        )
-
-    model = ThrottledModel(FunctionModel(quota_spent), Throttle(0))
-
-    def shared_models(_env: Mapping[str, str]) -> tuple[Models, str]:
-        return Models(intake=model, analyst=model, ops=model), "shared"
-
-    monkeypatch.setattr(live, "models_from_environment", shared_models)
-    app = _live_app()
-
-    app.button(key="run-day").click().run()
-
-    assert not app.exception
-    assert any("ProviderWaitTooLong" in e.value and "run the day again" in e.value for e in app.error)

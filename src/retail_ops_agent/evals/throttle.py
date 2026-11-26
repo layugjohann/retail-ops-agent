@@ -129,19 +129,23 @@ class ThrottledModel(WrapperModel):
         self.request_timeout_seconds = request_timeout_seconds
         self.max_wait_seconds = max_wait_seconds
 
-    async def _wait_to_retry(self, status: str, attempt: int, seconds: float, message: str) -> None:
-        """Log the retry and wait, or raise ProviderWaitTooLong when the wait is over the cap."""
+    async def _wait_to_retry(
+        self, status: str, attempt: int, seconds: float, message: str, *, provider_asked: bool
+    ) -> None:
+        """Log the retry and wait, or raise ProviderWaitTooLong when the wait is over the cap.
+
+        provider_asked says whether the wait is the provider's retry_after or the model's own back-off,
+        so the error does not blame the provider for a wait it never asked for.
+        """
         if seconds > self.max_wait_seconds:
-            provider = PROVIDER_NAMES.get(self.wrapped.system, self.wrapped.system)
-            reason = (
-                "daily token limit likely spent"
-                if seconds >= DAILY_LIMIT_WAIT_SECONDS
-                else f"longer than the {format_wait(self.max_wait_seconds)} this run waits"
-            )
-            raise ProviderWaitTooLong(
-                f"{provider} asks to wait {format_wait(seconds)}: {reason} "
-                f"(model {self.model_name}, {status}: {message})"
-            )
+            cap = f"over the {format_wait(self.max_wait_seconds)} cap"
+            if provider_asked:
+                provider = PROVIDER_NAMES.get(self.wrapped.system, self.wrapped.system)
+                reason = "daily token limit likely spent" if seconds >= DAILY_LIMIT_WAIT_SECONDS else cap
+                summary = f"{provider} asks to wait {format_wait(seconds)}: {reason}"
+            else:
+                summary = f"Backing off {format_wait(seconds)} after {status} is {cap}"
+            raise ProviderWaitTooLong(f"{summary} (model {self.model_name}, {status}: {message})")
         logger.warning(
             "%s: %s on attempt %d, retrying in %s: %s",
             self.model_name,
@@ -174,6 +178,7 @@ class ThrottledModel(WrapperModel):
                     retries + 1,
                     self.backoff_seconds * 2**retries,
                     f"no answer within {format_wait(self.request_timeout_seconds)}",
+                    provider_asked=False,
                 )
             except ModelAPIError as error:
                 if not _worth_retrying(error) or retries >= self.max_retries:
@@ -184,5 +189,6 @@ class ThrottledModel(WrapperModel):
                     retries + 1,
                     error.retry_after or self.backoff_seconds * 2**retries,
                     provider_message(error),
+                    provider_asked=bool(error.retry_after),
                 )
             retries += 1
