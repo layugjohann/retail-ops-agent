@@ -17,6 +17,12 @@ edit is the owner's decision.
    was flagged in 10 of 22 reviews (Issues 03, 04, 05, 08, 10, 11, 13, 15, 20, 22). `GLOSSARY.md` hasn't changed
    since Issue 18. As things stand, the rule costs review tokens on every Run and changes nothing. Pick one:
    - [ ] Move it under `## Must`, so the Review Session adds the entry itself (costs tokens on most Issues).
-   - [ ] Delete it, and add glossary entries by hand with `/domain-modeling` when a term matters.
+   - [x] Delete it, and add glossary entries by hand with `/domain-modeling` when a term matters.
 
-- [ ] Both edits made, and this Issue's comments record which option was chosen.
+- [x] Both edits made, and this Issue's comments record which option was chosen.
+
+## Comments
+
+**Decision (2026-11-26): delete the GLOSSARY rule.** Flagged in 10 of 22 reviews and never acted on, so it only cost
+review tokens. Naming a domain term is a judgement call, so glossary entries are now added by hand with
+`/domain-modeling` when a term matters. The correctness rule is added as the last item under `## Must`.

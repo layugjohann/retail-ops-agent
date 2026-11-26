@@ -25,7 +25,6 @@ Sources: GLOSSARY.md, docs/adr/0001-0006, .scratch/retail-ops-agent/spec.md.
 ## Naming
 
 - Code, comments, docs and UI text use the terms in `GLOSSARY.md` and never their listed _Avoid_ words (e.g. `Upload` not `file`, `Defect` not `error`, `Reorder` not `purchase_order`, `Sales Channel` not `location`, `Ops Day` not `run` or `batch`).
-- A new domain concept is added to `GLOSSARY.md` in the same change that introduces it.
 - Upload statuses are exactly `accepted`, `safe_fixed`, `quarantined` and `superseded`; Action Tiers are `0`, `1` and `2`.
 
 ## Structure
@@ -73,3 +72,4 @@ so it costs tokens on every Issue that breaks it. Keep this list short: only rul
 - Every Tier 1 Action is written to the Audit Log with what triggered it, who took it, its Tier and an undo recipe.
 - A Tier 2 Action that already went out is never undone automatically; it is flagged for a human.
 - Never commit or log secrets, API keys or tokens.
+- Behaviour the change adds matches its own docstrings, comments, the Spec and the ADRs it touches.
