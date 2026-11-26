@@ -53,6 +53,37 @@ class Reorder(BaseModel):
     status: ReorderStatus
 
 
+# The seed the ERP MCP server builds its catalog from unless told otherwise.
+DEFAULT_SEED = 42
+
+
+# The ERP MCP server wraps every tool result in one of these objects, so its structured result is always a
+# JSON object. They live here so the ERP client can read them without importing the server (ADR 0006).
+class SalesChannelList(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    sales_channels: list[SalesChannel]
+
+
+class SkuList(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    skus: list[Sku]
+
+
+class SupplierList(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    suppliers: list[Supplier]
+
+
+class StockLevelList(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    stock_levels: list[StockLevel]
+
+
+class ReorderList(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    reorders: list[Reorder]
+
+
 class ErpClient(Protocol):
     def list_sales_channels(self) -> list[SalesChannel]: ...
 

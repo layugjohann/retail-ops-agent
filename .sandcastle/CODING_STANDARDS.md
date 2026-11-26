@@ -18,6 +18,7 @@ Sources: GLOSSARY.md, docs/adr/0001-0006, .scratch/retail-ops-agent/spec.md.
 
 - Python only, packaged with uv; dependencies are added with `uv add`, never by hand-editing a lock file.
 - Code passes ruff and the static typechecker with no new ignores; a `# type: ignore` or `# noqa` names the specific code and says why.
+- No dead code: unused functions, classes, variables and imports are deleted, and a genuine false positive goes in `vulture_whitelist.py` with a reason. (enforced by vulture, `make deadcode`)
 - Public functions and every agent's output are fully typed; agent outputs are Pydantic models, never free-form dicts or strings.
 - No paid service or paid model is required to build, test, run or demo anything; free-tier models are the default and frontier models are only reached with a user-supplied key (ADR 0001).
 
@@ -35,13 +36,13 @@ Sources: GLOSSARY.md, docs/adr/0001-0006, .scratch/retail-ops-agent/spec.md.
 - A Data Problem is a structured outcome returned to Intake, not a free-form message between agents.
 - Anomaly detection is deterministic statistics with no model call; the same data always gives the same Anomalies.
 - Which Defect kinds have a Safe Fix is decided by a fixed table in code, not by the model.
-- Agents and the Action policy reach the ERP only through the ERP client interface; nothing imports the mock ERP's internals (ADR 0006).
+- Agents and the Action policy reach the ERP only through the ERP client interface; nothing imports the mock ERP's internals (ADR 0006). (Importing `retail_ops_agent.erp_server` outside itself and the tests is enforced by ruff TID.)
 - Notifications go only through the Notifier interface and Uploads arrive only through the Data Source interface.
-- Agents are built with Pydantic AI; no LangGraph or hand-written provider tool loop (ADR 0004).
+- Agents are built with Pydantic AI; no LangGraph or hand-written provider tool loop (ADR 0004). (No LangGraph is enforced by ruff TID.)
 - The Analyst agent's tools are read-only.
 - The Streamlit dashboard holds no business logic: it reads views and calls operations of the Ops Day boundary only.
 - n8n workflows only trigger Ops Days and forward notifications; any rule lives in tested Python.
-- Times come from the injected clock, never from `datetime.now()` or `time.time()` behind the boundary.
+- Times come from the injected clock, never from `datetime.now()` or `time.time()` behind the boundary. (enforced by ruff TID)
 - Generated data comes from the seeded generator (ADR 0005); any randomness takes an explicit seed.
 
 ## Testing

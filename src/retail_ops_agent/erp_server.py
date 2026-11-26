@@ -15,14 +15,21 @@ from collections.abc import Callable, Sequence
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
-from pydantic import BaseModel, ConfigDict
 
-from retail_ops_agent.catalog import SalesChannel, Sku, Supplier
-from retail_ops_agent.erp import ErpRefusal, InMemoryErp, Reorder, StockLevel
+from retail_ops_agent.erp import (
+    DEFAULT_SEED,
+    ErpRefusal,
+    InMemoryErp,
+    Reorder,
+    ReorderList,
+    SalesChannelList,
+    SkuList,
+    StockLevelList,
+    SupplierList,
+)
 from retail_ops_agent.generator import generate_catalog
 
 SERVER_NAME = "cobalt-home-erp"
-DEFAULT_SEED = 42
 
 _READ = ToolAnnotations(
     read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False
@@ -33,32 +40,6 @@ _WRITE = ToolAnnotations(
 _CANCEL = ToolAnnotations(
     read_only_hint=False, destructive_hint=True, idempotent_hint=False, open_world_hint=True
 )
-
-
-# Every tool returns one of these objects, so its structured result is always a JSON object.
-class SalesChannelList(BaseModel):
-    model_config = ConfigDict(frozen=True)
-    sales_channels: list[SalesChannel]
-
-
-class SkuList(BaseModel):
-    model_config = ConfigDict(frozen=True)
-    skus: list[Sku]
-
-
-class SupplierList(BaseModel):
-    model_config = ConfigDict(frozen=True)
-    suppliers: list[Supplier]
-
-
-class StockLevelList(BaseModel):
-    model_config = ConfigDict(frozen=True)
-    stock_levels: list[StockLevel]
-
-
-class ReorderList(BaseModel):
-    model_config = ConfigDict(frozen=True)
-    reorders: list[Reorder]
 
 
 def build_erp_server(erp: InMemoryErp) -> MCPServer:

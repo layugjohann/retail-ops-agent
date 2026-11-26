@@ -19,12 +19,14 @@ from mcp.types import CallToolResult, TextContent
 from pydantic import BaseModel
 
 from retail_ops_agent.catalog import SalesChannel, Sku, Supplier
-from retail_ops_agent.erp import ErpRefusal, Reorder, StockLevel
-from retail_ops_agent.erp_server import (
+from retail_ops_agent.erp import (
     DEFAULT_SEED,
+    ErpRefusal,
+    Reorder,
     ReorderList,
     SalesChannelList,
     SkuList,
+    StockLevel,
     StockLevelList,
     SupplierList,
 )

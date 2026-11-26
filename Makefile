@@ -1,6 +1,6 @@
-.PHONY: check lint format-check typecheck test format dashboard evals record deploy trigger n8n
+.PHONY: check lint format-check typecheck deadcode test format dashboard evals record deploy trigger n8n
 
-check: lint format-check typecheck test
+check: lint format-check typecheck deadcode test
 
 lint:
 	uv run ruff check .
@@ -10,6 +10,10 @@ format-check:
 
 typecheck:
 	uv run pyright
+
+# Dead code; settings under [tool.vulture] in pyproject.toml, false positives in vulture_whitelist.py.
+deadcode:
+	uv run vulture
 
 test:
 	uv run pytest
